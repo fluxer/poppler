@@ -48,7 +48,7 @@
 #include <fofi/FoFiTrueType.h>
 #include "ArthurOutputDev.h"
 
-#include <QtCore/QtDebug>
+#include <QtCore/QDebug>
 #include <QtGui/QPainterPath>
 //------------------------------------------------------------------------
 

@@ -2,7 +2,7 @@
 #include <QtGui/QApplication>
 #include <QtGui/QImage>
 #include <QtGui/QPainter>
-#include <QtGui/QPaintEvent>
+#include <QtCore/QEvent>
 #include <QtGui/QWidget>
 
 #include <poppler-qt4.h>

@@ -37,6 +37,8 @@
 #include "GfxState.h"
 
 #include <QtGui/QPainter>
+#include <QtGui/QPen>
+#include <QtGui/QFont>
 
 class GfxState;
 class GfxPath;

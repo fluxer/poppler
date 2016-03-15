@@ -24,8 +24,13 @@
 
 // qt/kde includes
 #include <QtCore/QRegExp>
+#ifndef QT_KATIE
 #include <QtCore/QtAlgorithms>
 #include <QtXml/QDomElement>
+#else
+#include <QtCore/qalgorithms.h>
+#include <QtXml/qdom.h>
+#endif // QT_KATIE
 #include <QtGui/QColor>
 #include <QtGui/QTransform>
 

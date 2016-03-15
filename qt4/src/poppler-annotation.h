@@ -28,15 +28,22 @@
 #define _POPPLER_ANNOTATION_H_
 
 #include <QtCore/QDateTime>
+#ifndef QT_KATIE
 #include <QtCore/QSharedDataPointer>
-#include <QtCore/QLinkedList>
-#include <QtCore/QList>
 #include <QtCore/QPointF>
 #include <QtCore/QRectF>
+#include <QtXml/QDomDocument>
+#else
+#include <QtCore/QSharedData>
+#include <QtCore/QPoint>
+#include <QtCore/QRect>
+#include <QtXml/qdom.h>
+#endif // QT_KATIE
+#include <QtCore/QLinkedList>
+#include <QtCore/QList>
 #include <QtCore/QVector>
 #include <QtGui/QColor>
 #include <QtGui/QFont>
-#include <QtXml/QDomDocument>
 #include "poppler-export.h"
 
 namespace Poppler {

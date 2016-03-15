@@ -25,8 +25,8 @@
 #define _POPPLER_LINK_H_
 
 #include <QtCore/QString>
-#include <QtCore/QRectF>
-#include <QtCore/QSharedDataPointer>
+#include <QtCore/QRect>
+#include <QtCore/QSharedData>
 #include "poppler-export.h"
 
 struct Ref;

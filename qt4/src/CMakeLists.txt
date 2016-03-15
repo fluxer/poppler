@@ -3,6 +3,7 @@ add_definitions(${QT4_DEFINITIONS})
 include_directories(
   ${CMAKE_CURRENT_SOURCE_DIR}
   ${QT4_INCLUDE_DIR}
+  ${QT_INCLUDES}
   ${CMAKE_CURRENT_BINARY_DIR}
 )
 
@@ -31,7 +32,7 @@ set(poppler_qt4_SRCS
 qt4_automoc(${poppler_qt4_SRCS})
 add_library(poppler-qt4 SHARED ${poppler_qt4_SRCS})
 set_target_properties(poppler-qt4 PROPERTIES VERSION 4.6.0 SOVERSION 4)
-target_link_libraries(poppler-qt4 poppler ${QT4_QTCORE_LIBRARY} ${QT4_QTGUI_LIBRARY} ${QT4_QTXML_LIBRARY})
+target_link_libraries(poppler-qt4 poppler ${QT_QTCORE_LIBRARY} ${QT_QTGUI_LIBRARY} ${QT_QTXML_LIBRARY})
 if(MSVC)
 target_link_libraries(poppler-qt4 poppler ${poppler_LIBS})
 endif(MSVC)

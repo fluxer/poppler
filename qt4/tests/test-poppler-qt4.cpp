@@ -3,9 +3,8 @@
 #include <QtGui/QApplication>
 #include <QtGui/QImage>
 #include <QtGui/QLabel>
-#include <QtGui/QMouseEvent>
+#include <QtCore/QEvent>
 #include <QtGui/QPainter>
-#include <QtGui/QPaintEvent>
 #include <QtGui/QToolTip>
 #include <QtGui/QWidget>
 

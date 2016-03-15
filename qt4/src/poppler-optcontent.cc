@@ -26,7 +26,7 @@
 #include "poppler-private.h"
 
 #include <QtCore/QDebug>
-#include <QtCore/QtAlgorithms>
+#include <QtCore/qalgorithms.h>
 
 #include "poppler/OptionalContent.h"
 

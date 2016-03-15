@@ -21,7 +21,7 @@
 
 #include "poppler-qt4.h"
 
-#include <QtCore/QSizeF>
+#include <QtCore/QSize>
 
 #include <Form.h>
 #include <Object.h>

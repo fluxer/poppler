@@ -6,6 +6,7 @@ include_directories(
   ${CMAKE_CURRENT_SOURCE_DIR}/../src
   ${CMAKE_CURRENT_BINARY_DIR}
   ${QT4_INCLUDE_DIR}
+  ${QT_INCLUDES}
 )
 
 macro(QT4_ADD_SIMPLETEST exe source)
@@ -28,7 +29,7 @@ macro(QT4_ADD_QTEST exe source)
     )
     poppler_add_unittest(${exe} BUILD_QT4_TESTS ${${test_name}_SOURCES})
     qt4_automoc(${${test_name}_SOURCES})
-    target_link_libraries(${exe} poppler-qt4 ${QT4_QTTEST_LIBRARY})
+    target_link_libraries(${exe} poppler-qt4 ${QT_QTTEST_LIBRARY})
     if(MSVC)
       target_link_libraries(${exe} poppler ${poppler_LIBS})
     endif(MSVC)

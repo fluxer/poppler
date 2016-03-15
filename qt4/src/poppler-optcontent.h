@@ -21,7 +21,7 @@
 #ifndef POPPLER_OPTCONTENT_H
 #define POPPLER_OPTCONTENT_H
 
-#include <QtCore/QAbstractListModel>
+#include <QtCore/QAbstractItemModel>
 
 #include "poppler-export.h"
 

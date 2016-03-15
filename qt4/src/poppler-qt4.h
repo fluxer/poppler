@@ -41,7 +41,7 @@
 #include <QtCore/QByteArray>
 #include <QtCore/QDateTime>
 #include <QtCore/QSet>
-#include <QtXml/QDomDocument>
+#include <QtXml/qdom.h>
 #include "poppler-export.h"
 
 class EmbFile;

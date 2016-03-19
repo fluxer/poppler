@@ -3,6 +3,9 @@
 #include <QtGui/QImage>
 #include <QtGui/QPainter>
 #include <QtCore/QEvent>
+#ifndef QT_KATIE
+#include <QtGui/QKeyEvent>
+#endif
 #include <QtGui/QWidget>
 
 #include <poppler-qt4.h>

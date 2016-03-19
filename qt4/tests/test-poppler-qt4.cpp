@@ -4,6 +4,9 @@
 #include <QtGui/QImage>
 #include <QtGui/QLabel>
 #include <QtCore/QEvent>
+#ifndef QT_KATIE
+#include <QtGui/QMouseEvent>
+#endif
 #include <QtGui/QPainter>
 #include <QtGui/QToolTip>
 #include <QtGui/QWidget>

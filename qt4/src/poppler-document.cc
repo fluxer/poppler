@@ -40,6 +40,7 @@
 #include <QtCore/QDebug>
 #include <QtCore/QFile>
 #include <QtCore/QByteArray>
+#include <QtCore/QScopedPointer>
 
 #include "poppler-private.h"
 #include "poppler-page-private.h"

@@ -21,7 +21,7 @@
 
 #include "abstractinfodock.h"
 
-class QTableWidget;
+#include <QTableWidget>
 
 class FontsDock : public AbstractInfoDock
 {

@@ -29,7 +29,7 @@ class Array;
 class OCGs;
 class OptionalContentGroup;
 
-class QModelIndex;
+#include <QModelIndex>
 
 namespace Poppler
 {

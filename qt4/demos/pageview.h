@@ -24,7 +24,7 @@
 
 #include "documentobserver.h"
 
-class QLabel;
+#include <QLabel>
 
 class PageView : public QScrollArea, public DocumentObserver
 {

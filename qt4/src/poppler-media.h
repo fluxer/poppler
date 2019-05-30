@@ -26,7 +26,7 @@
 #include <QtCore/QString>
 
 class MediaRendition;
-class QIODevice;
+#include <QIODevice>
 
 namespace Poppler
 {

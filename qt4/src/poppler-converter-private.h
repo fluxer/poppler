@@ -22,7 +22,7 @@
 
 #include <QtCore/QString>
 
-class QIODevice;
+#include <QIODevice>
 
 namespace Poppler {
 

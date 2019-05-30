@@ -24,7 +24,7 @@
 
 #include <Object.h>
 
-class QColor;
+#include <QColor>
 
 class AnnotColor;
 

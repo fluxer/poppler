@@ -21,7 +21,7 @@
 
 #include "abstractinfodock.h"
 
-class QTreeWidget;
+#include <QTreeWidget>
 
 class TocDock : public AbstractInfoDock
 {

@@ -24,8 +24,8 @@
 
 #include "documentobserver.h"
 
-class QAction;
-class QComboBox;
+#include <QAction>
+#include <QComboBox>
 
 class NavigationToolBar : public QToolBar, public DocumentObserver
 {

@@ -21,7 +21,7 @@
 
 #include "abstractinfodock.h"
 
-class QListWidget;
+#include <QListWidget>
 
 class PermissionsDock : public AbstractInfoDock
 {

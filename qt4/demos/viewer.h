@@ -21,9 +21,9 @@
 
 #include <QtGui/QMainWindow>
 
-class QAction;
-class QActionGroup;
-class QLabel;
+#include <QAction>
+#include <QActionGroup>
+#include <QLabel>
 class DocumentObserver;
 namespace Poppler {
 class Document;

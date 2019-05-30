@@ -21,7 +21,7 @@
 
 #include "abstractinfodock.h"
 
-class QTextEdit;
+#include <QTextEdit>
 
 class MetadataDock : public AbstractInfoDock
 {

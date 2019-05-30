@@ -23,7 +23,7 @@
 #include "Object.h"
 #include "Stream.h"
 
-class QIODevice;
+#include <QIODevice>
 
 namespace Poppler {
 

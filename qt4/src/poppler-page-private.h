@@ -24,7 +24,7 @@
 
 #include "CharTypes.h"
 
-class QRectF;
+#include <QRectF>
 
 class LinkAction;
 class Page;

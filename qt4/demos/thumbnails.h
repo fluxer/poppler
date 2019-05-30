@@ -22,8 +22,8 @@
 
 #include "abstractinfodock.h"
 
-class QListWidget;
-class QListWidgetItem;
+#include <QListWidget>
+#include <QListWidgetItem>
 
 class ThumbnailsDock : public AbstractInfoDock
 {

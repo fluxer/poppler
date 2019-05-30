@@ -21,7 +21,7 @@
 
 #include "abstractinfodock.h"
 
-class QTreeView;
+#include <QTreeView>
 
 class OptContentDock : public AbstractInfoDock
 {

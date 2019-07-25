@@ -1,6 +1,8 @@
 /* poppler-document.cc: glib wrapper for poppler
  * Copyright (C) 2005, Red Hat, Inc.
  *
+ * Copyright (C) 2016 Jakub Alba <jakubalba@gmail.com>
+ *
  * This program is free software; you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
  * the Free Software Foundation; either version 2, or (at your option)
@@ -22,6 +24,7 @@
 #ifndef __GI_SCANNER__
 #include <goo/GooList.h>
 #include <splash/SplashBitmap.h>
+#include <DateInfo.h>
 #include <GlobalParams.h>
 #include <PDFDoc.h>
 #include <Outline.h>
@@ -227,7 +230,6 @@ poppler_document_new_from_data (char        *data,
                                 const char  *password,
                                 GError     **error)
 {
-  Object obj;
   PDFDoc *newDoc;
   MemStream *str;
   GooString *password_g;
@@ -237,8 +239,7 @@ poppler_document_new_from_data (char        *data,
   }
   
   // create stream
-  obj.initNull();
-  str = new MemStream(data, 0, length, &obj);
+  str = new MemStream(data, 0, length, Object(objNull));
 
   password_g = poppler_password_to_latin1(password);
   newDoc = new PDFDoc(str, password_g, password_g);
@@ -279,7 +280,6 @@ poppler_document_new_from_stream (GInputStream *stream,
                                   GCancellable *cancellable,
                                   GError      **error)
 {
-  Object obj;
   PDFDoc *newDoc;
   BaseStream *str;
   GooString *password_g;
@@ -297,12 +297,11 @@ poppler_document_new_from_stream (GInputStream *stream,
     return NULL;
   }
 
-  obj.initNull();
   if (stream_is_memory_buffer_or_local_file(stream)) {
-    str = new PopplerInputStream(stream, cancellable, 0, gFalse, 0, &obj);
+    str = new PopplerInputStream(stream, cancellable, 0, gFalse, 0, Object(objNull));
   } else {
     CachedFile *cachedFile = new CachedFile(new PopplerCachedFileLoader(stream, cancellable, length), new GooString());
-    str = new CachedFileStream(cachedFile, 0, gFalse, cachedFile->getLength(), &obj);
+    str = new CachedFileStream(cachedFile, 0, gFalse, cachedFile->getLength(), Object(objNull));
   }
 
   password_g = poppler_password_to_latin1(password);
@@ -711,6 +710,10 @@ poppler_document_find_dest (PopplerDocument *document,
 
 char *_poppler_goo_string_to_utf8(GooString *s)
 {
+  if (s == NULL) {
+    return NULL;
+  }
+
   char *result;
 
   if (s->hasUnicodeMarker()) {
@@ -737,39 +740,26 @@ char *_poppler_goo_string_to_utf8(GooString *s)
   return result;
 }
 
-static gchar *
-info_dict_get_string (Dict *info_dict, const gchar *key)
+static GooString *
+_poppler_goo_string_from_utf8(const gchar *src)
 {
-  Object obj;
-  GooString *goo_value;
-  gchar *result;
-
-  if (!info_dict->lookup ((gchar *)key, &obj)->isString ()) {
-    obj.free ();
+  if (src == NULL) {
     return NULL;
   }
 
-  goo_value = obj.getString ();
-  result = _poppler_goo_string_to_utf8(goo_value);
-  obj.free ();
+  gsize outlen;
 
-  return result;
-}
-
-static time_t
-info_dict_get_date (Dict *info_dict, const gchar *key)
-{
-  Object obj;
-  time_t result;
-
-  if (!info_dict->lookup ((gchar *)key, &obj)->isString ()) {
-    obj.free ();
-    return (time_t)-1;
+  gchar *utf16 = g_convert (src, -1, "UTF-16BE", "UTF-8", NULL, &outlen, NULL);
+  if (utf16 == NULL) {
+    return NULL;
   }
 
-  if (!_poppler_convert_pdf_date_to_gtime (obj.getString (), &result))
-    result = (time_t)-1;
-  obj.free ();
+  GooString *result = new GooString (utf16, outlen);
+  g_free (utf16);
+
+  if (!result->hasUnicodeMarker()) {
+    result->prependUnicodeMarker();
+  }
 
   return result;
 }
@@ -879,17 +869,39 @@ poppler_document_get_pdf_version (PopplerDocument *document,
 gchar *
 poppler_document_get_title (PopplerDocument *document)
 {
-  Object obj;
-  gchar *retval = NULL;
-
   g_return_val_if_fail (POPPLER_IS_DOCUMENT (document), NULL);
 
-  document->doc->getDocInfo (&obj);
-  if (obj.isDict ())
-    retval = info_dict_get_string (obj.getDict(), "Title");
-  obj.free ();
+  GooString *goo_title = document->doc->getDocInfoTitle();
+  gchar *utf8 = _poppler_goo_string_to_utf8(goo_title);
+  delete goo_title;
 
-  return retval;
+  return utf8;
+}
+
+/**
+ * poppler_document_set_title:
+ * @document: A #PopplerDocument
+ * @title: A new title
+ *
+ * Sets the document's title. If @title is %NULL, Title entry
+ * is removed from the document's Info dictionary.
+ *
+ * Since: 0.46
+ **/
+void
+poppler_document_set_title (PopplerDocument *document, const gchar *title)
+{
+  g_return_if_fail (POPPLER_IS_DOCUMENT (document));
+
+  GooString *goo_title;
+  if (!title) {
+    goo_title = NULL;
+  } else {
+    goo_title = _poppler_goo_string_from_utf8(title);
+    if (!goo_title)
+      return;
+  }
+  document->doc->setDocInfoTitle(goo_title);
 }
 
 /**
@@ -906,17 +918,39 @@ poppler_document_get_title (PopplerDocument *document)
 gchar *
 poppler_document_get_author (PopplerDocument *document)
 {
-  Object obj;
-  gchar *retval = NULL;
-
   g_return_val_if_fail (POPPLER_IS_DOCUMENT (document), NULL);
 
-  document->doc->getDocInfo (&obj);
-  if (obj.isDict ())
-    retval = info_dict_get_string (obj.getDict(), "Author");
-  obj.free ();
+  GooString *goo_author = document->doc->getDocInfoAuthor();
+  gchar *utf8 = _poppler_goo_string_to_utf8(goo_author);
+  delete goo_author;
 
-  return retval;
+  return utf8;
+}
+
+/**
+ * poppler_document_set_author:
+ * @document: A #PopplerDocument
+ * @author: A new author
+ *
+ * Sets the document's author. If @author is %NULL, Author
+ * entry is removed from the document's Info dictionary.
+ *
+ * Since: 0.46
+ **/
+void
+poppler_document_set_author (PopplerDocument *document, const gchar *author)
+{
+  g_return_if_fail (POPPLER_IS_DOCUMENT (document));
+
+  GooString *goo_author;
+  if (!author) {
+    goo_author = NULL;
+  } else {
+    goo_author = _poppler_goo_string_from_utf8(author);
+    if (!goo_author)
+      return;
+  }
+  document->doc->setDocInfoAuthor(goo_author);
 }
 
 /**
@@ -933,17 +967,39 @@ poppler_document_get_author (PopplerDocument *document)
 gchar *
 poppler_document_get_subject (PopplerDocument *document)
 {
-  Object obj;
-  gchar *retval = NULL;
-
   g_return_val_if_fail (POPPLER_IS_DOCUMENT (document), NULL);
 
-  document->doc->getDocInfo (&obj);
-  if (obj.isDict ())
-    retval = info_dict_get_string (obj.getDict(), "Subject");
-  obj.free ();
+  GooString *goo_subject = document->doc->getDocInfoSubject();
+  gchar *utf8 = _poppler_goo_string_to_utf8(goo_subject);
+  delete goo_subject;
 
-  return retval;
+  return utf8;
+}
+
+/**
+ * poppler_document_set_subject:
+ * @document: A #PopplerDocument
+ * @subject: A new subject
+ *
+ * Sets the document's subject. If @subject is %NULL, Subject
+ * entry is removed from the document's Info dictionary.
+ *
+ * Since: 0.46
+ **/
+void
+poppler_document_set_subject (PopplerDocument *document, const gchar *subject)
+{
+  g_return_if_fail (POPPLER_IS_DOCUMENT (document));
+
+  GooString *goo_subject;
+  if (!subject) {
+    goo_subject = NULL;
+  } else {
+    goo_subject = _poppler_goo_string_from_utf8(subject);
+    if (!goo_subject)
+      return;
+  }
+  document->doc->setDocInfoSubject(goo_subject);
 }
 
 /**
@@ -960,17 +1016,39 @@ poppler_document_get_subject (PopplerDocument *document)
 gchar *
 poppler_document_get_keywords (PopplerDocument *document)
 {
-  Object obj;
-  gchar *retval = NULL;
-
   g_return_val_if_fail (POPPLER_IS_DOCUMENT (document), NULL);
 
-  document->doc->getDocInfo (&obj);
-  if (obj.isDict ())
-    retval = info_dict_get_string (obj.getDict(), "Keywords");
-  obj.free ();
+  GooString *goo_keywords = document->doc->getDocInfoKeywords();
+  gchar *utf8 = _poppler_goo_string_to_utf8(goo_keywords);
+  delete goo_keywords;
 
-  return retval;
+  return utf8;
+}
+
+/**
+ * poppler_document_set_keywords:
+ * @document: A #PopplerDocument
+ * @keywords: New keywords
+ *
+ * Sets the document's keywords. If @keywords is %NULL,
+ * Keywords entry is removed from the document's Info dictionary.
+ *
+ * Since: 0.46
+ **/
+void
+poppler_document_set_keywords (PopplerDocument *document, const gchar *keywords)
+{
+  g_return_if_fail (POPPLER_IS_DOCUMENT (document));
+
+  GooString *goo_keywords;
+  if (!keywords) {
+    goo_keywords = NULL;
+  } else {
+    goo_keywords = _poppler_goo_string_from_utf8(keywords);
+    if (!goo_keywords)
+      return;
+  }
+  document->doc->setDocInfoKeywords(goo_keywords);
 }
 
 /**
@@ -989,17 +1067,39 @@ poppler_document_get_keywords (PopplerDocument *document)
 gchar *
 poppler_document_get_creator (PopplerDocument *document)
 {
-  Object obj;
-  gchar *retval = NULL;
-
   g_return_val_if_fail (POPPLER_IS_DOCUMENT (document), NULL);
 
-  document->doc->getDocInfo (&obj);
-  if (obj.isDict ())
-    retval = info_dict_get_string (obj.getDict(), "Creator");
-  obj.free ();
+  GooString *goo_creator = document->doc->getDocInfoCreator();
+  gchar *utf8 = _poppler_goo_string_to_utf8(goo_creator);
+  delete goo_creator;
 
-  return retval;
+  return utf8;
+}
+
+/**
+ * poppler_document_set_creator:
+ * @document: A #PopplerDocument
+ * @creator: A new creator
+ *
+ * Sets the document's creator. If @creator is %NULL, Creator
+ * entry is removed from the document's Info dictionary.
+ *
+ * Since: 0.46
+ **/
+void
+poppler_document_set_creator (PopplerDocument *document, const gchar *creator)
+{
+  g_return_if_fail (POPPLER_IS_DOCUMENT (document));
+
+  GooString *goo_creator;
+  if (!creator) {
+    goo_creator = NULL;
+  } else {
+    goo_creator = _poppler_goo_string_from_utf8(creator);
+    if (!goo_creator)
+      return;
+  }
+  document->doc->setDocInfoCreator(goo_creator);
 }
 
 /**
@@ -1018,17 +1118,39 @@ poppler_document_get_creator (PopplerDocument *document)
 gchar *
 poppler_document_get_producer (PopplerDocument *document)
 {
-  Object obj;
-  gchar *retval = NULL;
-
   g_return_val_if_fail (POPPLER_IS_DOCUMENT (document), NULL);
 
-  document->doc->getDocInfo (&obj);
-  if (obj.isDict ())
-    retval = info_dict_get_string (obj.getDict(), "Producer");
-  obj.free ();
+  GooString *goo_producer = document->doc->getDocInfoProducer();
+  gchar *utf8 = _poppler_goo_string_to_utf8(goo_producer);
+  delete goo_producer;
 
-  return retval;
+  return utf8;
+}
+
+/**
+ * poppler_document_set_producer:
+ * @document: A #PopplerDocument
+ * @producer: A new producer
+ *
+ * Sets the document's producer. If @producer is %NULL,
+ * Producer entry is removed from the document's Info dictionary.
+ *
+ * Since: 0.46
+ **/
+void
+poppler_document_set_producer (PopplerDocument *document, const gchar *producer)
+{
+  g_return_if_fail (POPPLER_IS_DOCUMENT (document));
+
+  GooString *goo_producer;
+  if (!producer) {
+    goo_producer = NULL;
+  } else {
+    goo_producer = _poppler_goo_string_from_utf8(producer);
+    if (!goo_producer)
+      return;
+  }
+  document->doc->setDocInfoProducer(goo_producer);
 }
 
 /**
@@ -1044,17 +1166,38 @@ poppler_document_get_producer (PopplerDocument *document)
 time_t
 poppler_document_get_creation_date (PopplerDocument *document)
 {
-  Object obj;
-  time_t retval = (time_t)-1;
-
   g_return_val_if_fail (POPPLER_IS_DOCUMENT (document), (time_t)-1);
 
-  document->doc->getDocInfo (&obj);
-  if (obj.isDict ())
-    retval = info_dict_get_date (obj.getDict(), "CreationDate");
-  obj.free ();
+  GooString *str = document->doc->getDocInfoCreatDate();
+  if (str == NULL) {
+    return (time_t)-1;
+  }
 
-  return retval;
+  time_t date;
+  gboolean success = _poppler_convert_pdf_date_to_gtime (str, &date);
+  delete str;
+
+  return (success) ? date : (time_t)-1;
+}
+
+/**
+ * poppler_document_set_creation_date:
+ * @document: A #PopplerDocument
+ * @creation_date: A new creation date
+ *
+ * Sets the document's creation date. If @creation_date is -1, CreationDate
+ * entry is removed from the document's Info dictionary.
+ *
+ * Since: 0.46
+ **/
+void
+poppler_document_set_creation_date (PopplerDocument *document,
+                                    time_t creation_date)
+{
+  g_return_if_fail (POPPLER_IS_DOCUMENT (document));
+
+  GooString *str = creation_date == (time_t)-1 ? NULL : timeToDateString (&creation_date);
+  document->doc->setDocInfoCreatDate (str);
 }
 
 /**
@@ -1070,17 +1213,38 @@ poppler_document_get_creation_date (PopplerDocument *document)
 time_t
 poppler_document_get_modification_date (PopplerDocument *document)
 {
-  Object obj;
-  time_t retval = (time_t)-1;
-
   g_return_val_if_fail (POPPLER_IS_DOCUMENT (document), (time_t)-1);
 
-  document->doc->getDocInfo (&obj);
-  if (obj.isDict ())
-    retval = info_dict_get_date (obj.getDict(), "ModDate");
-  obj.free ();
+  GooString *str = document->doc->getDocInfoModDate();
+  if (str == NULL) {
+    return (time_t)-1;
+  }
 
-  return retval;
+  time_t date;
+  gboolean success = _poppler_convert_pdf_date_to_gtime (str, &date);
+  delete str;
+
+  return (success) ? date : (time_t)-1;
+}
+
+/**
+ * poppler_document_set_modification_date:
+ * @document: A #PopplerDocument
+ * @modification_date: A new modification date
+ *
+ * Sets the document's modification date. If @modification_date is -1, ModDate
+ * entry is removed from the document's Info dictionary.
+ *
+ * Since: 0.46
+ **/
+void
+poppler_document_set_modification_date (PopplerDocument *document,
+                                        time_t modification_date)
+{
+  g_return_if_fail (POPPLER_IS_DOCUMENT (document));
+
+  GooString *str = modification_date == (time_t)-1 ? NULL : timeToDateString (&modification_date);
+  document->doc->setDocInfoModDate (str);
 }
 
 /**
@@ -1291,12 +1455,52 @@ poppler_document_get_property (GObject    *object,
 }
 
 static void
+poppler_document_set_property (GObject      *object,
+			       guint         prop_id,
+			       const GValue *value,
+			       GParamSpec   *pspec)
+{
+  PopplerDocument *document = POPPLER_DOCUMENT (object);
+
+  switch (prop_id)
+    {
+    case PROP_TITLE:
+      poppler_document_set_title (document, g_value_get_string (value));
+      break;
+    case PROP_AUTHOR:
+      poppler_document_set_author (document, g_value_get_string (value));
+      break;
+    case PROP_SUBJECT:
+      poppler_document_set_subject (document, g_value_get_string (value));
+      break;
+    case PROP_KEYWORDS:
+      poppler_document_set_keywords (document, g_value_get_string (value));
+      break;
+    case PROP_CREATOR:
+      poppler_document_set_creator (document, g_value_get_string (value));
+      break;
+    case PROP_PRODUCER:
+      poppler_document_set_producer (document, g_value_get_string (value));
+      break;
+    case PROP_CREATION_DATE:
+      poppler_document_set_creation_date (document, g_value_get_int (value));
+      break;
+    case PROP_MOD_DATE:
+      poppler_document_set_modification_date (document, g_value_get_int (value));
+      break;
+    default:
+      G_OBJECT_WARN_INVALID_PROPERTY_ID (object, prop_id, pspec);
+    }
+}
+
+static void
 poppler_document_class_init (PopplerDocumentClass *klass)
 {
   GObjectClass *gobject_class = G_OBJECT_CLASS (klass);
 
   gobject_class->finalize = poppler_document_finalize;
   gobject_class->get_property = poppler_document_get_property;
+  gobject_class->set_property = poppler_document_set_property;
 
   /**
    * PopplerDocument:title:
@@ -1309,7 +1513,7 @@ poppler_document_class_init (PopplerDocumentClass *klass)
 							"Document Title",
 							"The title of the document",
 							NULL,
-							G_PARAM_READABLE));
+							G_PARAM_READWRITE));
 
   /**
    * PopplerDocument:format:
@@ -1361,7 +1565,7 @@ poppler_document_class_init (PopplerDocumentClass *klass)
 							"Author",
 							"The author of the document",
 							NULL,
-							G_PARAM_READABLE));
+							G_PARAM_READWRITE));
 
   /**
    * PopplerDocument:subject:
@@ -1374,7 +1578,7 @@ poppler_document_class_init (PopplerDocumentClass *klass)
 							"Subject",
 							"Subjects the document touches",
 							NULL,
-							G_PARAM_READABLE));
+							G_PARAM_READWRITE));
 
   /**
    * PopplerDocument:keywords:
@@ -1387,7 +1591,7 @@ poppler_document_class_init (PopplerDocumentClass *klass)
 							"Keywords",
 							"Keywords",
 							NULL,
-							G_PARAM_READABLE));
+							G_PARAM_READWRITE));
 
   /**
    * PopplerDocument:creator:
@@ -1400,7 +1604,7 @@ poppler_document_class_init (PopplerDocumentClass *klass)
 							"Creator",
 							"The software that created the document",
 							NULL,
-							G_PARAM_READABLE));
+							G_PARAM_READWRITE));
 
   /**
    * PopplerDocument:producer:
@@ -1413,7 +1617,7 @@ poppler_document_class_init (PopplerDocumentClass *klass)
 							"Producer",
 							"The software that converted the document",
 							NULL,
-							G_PARAM_READABLE));
+							G_PARAM_READWRITE));
 
   /**
    * PopplerDocument:creation-date:
@@ -1426,7 +1630,7 @@ poppler_document_class_init (PopplerDocumentClass *klass)
 						     "Creation Date",
 						     "The date and time the document was created",
 						     -1, G_MAXINT, -1,
-						     G_PARAM_READABLE));
+						     G_PARAM_READWRITE));
 
   /**
    * PopplerDocument:mod-date:
@@ -1439,7 +1643,7 @@ poppler_document_class_init (PopplerDocumentClass *klass)
 						     "Modification Date",
 						     "The date and time the document was modified",
 						     -1, G_MAXINT, -1,
-						     G_PARAM_READABLE));
+						     G_PARAM_READWRITE));
 
   /**
    * PopplerDocument:linearized:
@@ -2201,32 +2405,26 @@ get_optional_content_rbgroups (OCGs *ocg)
     int i, j;
 
     for (i = 0; i < rb->getLength (); ++i) {
-      Object obj;
       Array *rb_array;
       GList *group = NULL;
 
-      rb->get (i, &obj);
+      Object obj = rb->get (i);
       if (!obj.isArray ()) {
-        obj.free ();
 	continue;
       }
 
       rb_array = obj.getArray ();
       for (j = 0; j < rb_array->getLength (); ++j) {
-        Object ref;
 	OptionalContentGroup *oc;
 
-	rb_array->getNF (j, &ref);
+        Object ref = rb_array->getNF (j);
 	if (!ref.isRef ()) {
-	  ref.free ();
 	  continue;
 	}
 
 	oc = ocg->findOcgByRef (ref.getRef ());
 	group = g_list_prepend (group, oc);
-	ref.free ();
       }
-      obj.free ();
 
       groups = g_list_prepend (groups, group);
     }
@@ -2259,14 +2457,10 @@ get_optional_content_items_sorted (OCGs *ocg, Layer *parent, Array *order)
   int i;
 
   for (i = 0; i < order->getLength (); ++i) {
-    Object orderItem;
-      
-    order->get (i, &orderItem);
+    Object orderItem = order->get (i);
 
     if (orderItem.isDict ()) {
-      Object ref;
-      
-      order->getNF (i, &ref);
+      Object ref = order->getNF (i);
       if (ref.isRef ()) {
         OptionalContentGroup *oc = ocg->findOcgByRef (ref.getRef ());
 	Layer *layer = layer_new (oc);
@@ -2274,7 +2468,6 @@ get_optional_content_items_sorted (OCGs *ocg, Layer *parent, Array *order)
 	items = g_list_prepend (items, layer);
 	last_item = layer;
       }
-      ref.free ();
     } else if (orderItem.isArray () && orderItem.arrayGetLength () > 0) {
       if (!last_item) {
         last_item = layer_new (NULL);
@@ -2285,7 +2478,6 @@ get_optional_content_items_sorted (OCGs *ocg, Layer *parent, Array *order)
     } else if (orderItem.isString ()) {
       last_item->label = _poppler_goo_string_to_utf8 (orderItem.getString ());
     }
-    orderItem.free ();
   }
   
   return g_list_reverse (items);

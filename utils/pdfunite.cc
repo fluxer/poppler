@@ -4,12 +4,13 @@
 //
 // This file is licensed under the GPLv2 or later
 //
-// Copyright (C) 2011-2014 Thomas Freitag <Thomas.Freitag@alfa.de>
+// Copyright (C) 2011-2015, 2017 Thomas Freitag <Thomas.Freitag@alfa.de>
 // Copyright (C) 2012 Arseny Solokha <asolokha@gmx.com>
 // Copyright (C) 2012 Fabio D'Urso <fabiodurso@hotmail.it>
-// Copyright (C) 2012, 2014 Albert Astals Cid <aacid@kde.org>
+// Copyright (C) 2012, 2014, 2017 Albert Astals Cid <aacid@kde.org>
 // Copyright (C) 2013 Adrian Johnson <ajohnson@redneon.com>
 // Copyright (C) 2013 Hib Eris <hib@hiberis.nl>
+// Copyright (C) 2015 Arthur Stavisky <vovodroid@gmail.com>
 //
 //========================================================================
 
@@ -36,6 +37,89 @@ static const ArgDesc argDesc[] = {
    "print usage information"},
   {NULL}
 };
+
+static void doMergeNameTree(PDFDoc *doc, XRef *srcXRef, XRef *countRef, int oldRefNum, int newRefNum, Dict *srcNameTree, Dict *mergeNameTree, int numOffset) {
+  Object mergeNameArray = mergeNameTree->lookup("Names");
+  Object srcNameArray = srcNameTree->lookup("Names");
+  if (mergeNameArray.isArray() && srcNameArray.isArray()) {
+    Array *newNameArray = new Array(srcXRef);
+    int j = 0;
+    for (int i = 0; i < srcNameArray.arrayGetLength() - 1; i += 2) {
+      Object key = srcNameArray.arrayGetNF(i);
+      Object value = srcNameArray.arrayGetNF(i + 1);
+      if (key.isString() && value.isRef()) {
+        while (j < mergeNameArray.arrayGetLength() - 1) {
+          Object mkey = mergeNameArray.arrayGetNF(j);
+          Object mvalue = mergeNameArray.arrayGetNF(j + 1);
+          if (mkey.isString() && mvalue.isRef()) {
+            if (mkey.getString()->cmp(key.getString()) < 0) {
+              newNameArray->add(Object(new GooString(mkey.getString()->getCString())));
+              newNameArray->add(Object(mvalue.getRef().num + numOffset, mvalue.getRef().gen));
+              j += 2;
+            } else if (mkey.getString()->cmp(key.getString()) == 0) {
+              j += 2;
+            } else {
+              break;
+            }
+          } else {
+            j += 2;
+          }
+        }
+        newNameArray->add(Object(new GooString(key.getString()->getCString())));
+        newNameArray->add(Object(value.getRef().num, value.getRef().gen));
+      }
+    }
+    while (j < mergeNameArray.arrayGetLength() - 1) {
+      Object mkey = mergeNameArray.arrayGetNF(j);
+      Object mvalue = mergeNameArray.arrayGetNF(j + 1);
+      if (mkey.isString() && mvalue.isRef()) {
+        newNameArray->add(Object(new GooString(mkey.getString()->getCString())));
+        newNameArray->add(Object(mvalue.getRef().num + numOffset, mvalue.getRef().gen));
+      }
+      j += 2;
+    }
+    srcNameTree->set("Names", Object(newNameArray));
+    doc->markPageObjects(mergeNameTree, srcXRef, countRef, numOffset, oldRefNum, newRefNum);
+  } else if (srcNameArray.isNull() && mergeNameArray.isArray()) {
+    Array *newNameArray = new Array(srcXRef);
+    for (int i = 0; i < mergeNameArray.arrayGetLength() - 1; i += 2) {
+      Object key = mergeNameArray.arrayGetNF(i);
+      Object value = mergeNameArray.arrayGetNF(i + 1);
+      if (key.isString() && value.isRef()) {
+        newNameArray->add(Object(new GooString(key.getString()->getCString())));
+        newNameArray->add(Object(value.getRef().num + numOffset, value.getRef().gen));
+      }
+    }
+    srcNameTree->add(copyString("Names"), Object(newNameArray));
+    doc->markPageObjects(mergeNameTree, srcXRef, countRef, numOffset, oldRefNum, newRefNum);
+  }
+}
+
+static void doMergeNameDict(PDFDoc *doc, XRef *srcXRef, XRef *countRef, int oldRefNum, int newRefNum, Dict *srcNameDict, Dict *mergeNameDict, int numOffset) {
+  for (int i = 0; i < mergeNameDict->getLength(); i++) {
+    const char *key = mergeNameDict->getKey(i);
+    Object mergeNameTree = mergeNameDict->lookup(key);
+    Object srcNameTree = srcNameDict->lookup(key);
+    if (srcNameTree.isDict() && mergeNameTree.isDict()) {
+      doMergeNameTree(doc, srcXRef, countRef, oldRefNum, newRefNum, srcNameTree.getDict(), mergeNameTree.getDict(), numOffset);
+    } else if (srcNameTree.isNull() && mergeNameTree.isDict()) {
+      Object newNameTree(new Dict(srcXRef));
+      doMergeNameTree(doc, srcXRef, countRef, oldRefNum, newRefNum, newNameTree.getDict(), mergeNameTree.getDict(), numOffset);
+      srcNameDict->add(copyString(key), std::move(newNameTree));
+    }
+  }
+}
+
+static void doMergeFormDict(Dict *srcFormDict, Dict *mergeFormDict, int numOffset) {
+  Object srcFields = srcFormDict->lookup("Fields");
+  Object mergeFields = mergeFormDict->lookup("Fields");
+  if (srcFields.isArray() && mergeFields.isArray()) {
+    for (int i = 0; i < mergeFields.arrayGetLength(); i++) {
+      Object value = mergeFields.arrayGetNF(i);
+      srcFields.arrayAdd(Object(value.getRef().num + numOffset, value.getRef().gen));
+    }
+  }
+}
 
 ///////////////////////////////////////////////////////////////////////////
 int main (int argc, char *argv[])
@@ -109,55 +193,52 @@ int main (int argc, char *argv[])
   yRef->add(0, 65535, 0, gFalse);
   PDFDoc::writeHeader(outStr, majorVersion, minorVersion);
 
-  // handle OutputIntents, AcroForm & OCProperties
+  // handle OutputIntents, AcroForm, OCProperties & Names
   Object intents;
+  Object names;
   Object afObj;
   Object ocObj;
   if (docs.size() >= 1) {
-    Object catObj;
-    docs[0]->getXRef()->getCatalog(&catObj);
+    Object catObj = docs[0]->getXRef()->getCatalog();
     Dict *catDict = catObj.getDict();
-    catDict->lookup("OutputIntents", &intents);
-    catDict->lookupNF("AcroForm", &afObj);
+    intents = catDict->lookup("OutputIntents");
+    afObj = catDict->lookupNF("AcroForm");
     Ref *refPage = docs[0]->getCatalog()->getPageRef(1);
-    if (!afObj.isNull()) {
+    if (!afObj.isNull() && refPage) {
       docs[0]->markAcroForm(&afObj, yRef, countRef, 0, refPage->num, refPage->num);
     }
-    catDict->lookupNF("OCProperties", &ocObj);
-    if (!ocObj.isNull() && ocObj.isDict()) {
+    ocObj = catDict->lookupNF("OCProperties");
+    if (!ocObj.isNull() && ocObj.isDict() && refPage) {
       docs[0]->markPageObjects(ocObj.getDict(), yRef, countRef, 0, refPage->num, refPage->num);
+    }
+    names = catDict->lookup("Names");
+    if (!names.isNull() && names.isDict() && refPage) {
+      docs[0]->markPageObjects(names.getDict(), yRef, countRef, 0, refPage->num, refPage->num);
     }
     if (intents.isArray() && intents.arrayGetLength() > 0) {
       for (i = 1; i < (int) docs.size(); i++) {
-        Object pagecatObj, pageintents;
-        docs[i]->getXRef()->getCatalog(&pagecatObj);
+        Object pagecatObj = docs[i]->getXRef()->getCatalog();
         Dict *pagecatDict = pagecatObj.getDict();
-        pagecatDict->lookup("OutputIntents", &pageintents);
+        Object pageintents = pagecatDict->lookup("OutputIntents");
         if (pageintents.isArray() && pageintents.arrayGetLength() > 0) {
           for (j = intents.arrayGetLength() - 1; j >= 0; j--) {
-            Object intent;
-            intents.arrayGet(j, &intent, 0);
+            Object intent = intents.arrayGet(j, 0);
             if (intent.isDict()) {
-              Object idf;
-              intent.dictLookup("OutputConditionIdentifier", &idf);
+              Object idf = intent.dictLookup("OutputConditionIdentifier");
               if (idf.isString()) {
                 GooString *gidf = idf.getString();
                 GBool removeIntent = gTrue;
                 for (int k = 0; k < pageintents.arrayGetLength(); k++) {
-                  Object pgintent;
-                  pageintents.arrayGet(k, &pgintent, 0);
+                  Object pgintent = pageintents.arrayGet(k, 0);
                   if (pgintent.isDict()) {
-                    Object pgidf;
-                    pgintent.dictLookup("OutputConditionIdentifier", &pgidf);
+                    Object pgidf = pgintent.dictLookup("OutputConditionIdentifier");
                     if (pgidf.isString()) {
                       GooString *gpgidf = pgidf.getString();
                       if (gpgidf->cmp(gidf) == 0) {
-                        pgidf.free();
                         removeIntent = gFalse;
                         break;
                       }
                     }
-                    pgidf.free();
                   }
                 }
                 if (removeIntent) {
@@ -169,38 +250,34 @@ int main (int argc, char *argv[])
                 intents.arrayRemove(j);
                 error(errSyntaxWarning, -1, "Invalid output intent dict, missing required OutputConditionIdentifier");
               }
-              idf.free();
             } else {
               intents.arrayRemove(j);
             }
-            intent.free();
           }
         } else {
           error(errSyntaxWarning, -1, "Output intents differs, remove them all");
-          intents.free();
           break;
         }
-        pagecatObj.free();
-        pageintents.free();
       }
     }
     if (intents.isArray() && intents.arrayGetLength() > 0) {
       for (j = intents.arrayGetLength() - 1; j >= 0; j--) {
-        Object intent;
-        intents.arrayGet(j, &intent, 0);
+        Object intent = intents.arrayGet(j, 0);
         if (intent.isDict()) {
           docs[0]->markPageObjects(intent.getDict(), yRef, countRef, numOffset, 0, 0);
         } else {
           intents.arrayRemove(j);
         }
-        intent.free();
       }
     }
-    catObj.free();
   }
 
   for (i = 0; i < (int) docs.size(); i++) {
     for (j = 1; j <= docs[i]->getNumPages(); j++) {
+      if (!docs[i]->getCatalog()->getPage(j)) {
+        continue;
+      }
+
       PDFRectangle *cropBox = NULL;
       if (docs[i]->getCatalog()->getPage(j)->isCropped())
         cropBox = docs[i]->getCatalog()->getPage(j)->getCropBox();
@@ -208,23 +285,35 @@ int main (int argc, char *argv[])
 	    docs[i]->getCatalog()->getPage(j)->getRotate(),
 	    docs[i]->getCatalog()->getPage(j)->getMediaBox(), cropBox);
       Ref *refPage = docs[i]->getCatalog()->getPageRef(j);
-      Object page;
-      docs[i]->getXRef()->fetch(refPage->num, refPage->gen, &page);
+      Object page = docs[i]->getXRef()->fetch(refPage->num, refPage->gen);
       Dict *pageDict = page.getDict();
-      Dict *resDict = docs[i]->getCatalog()->getPage(j)->getResourceDict();
-      if (resDict) {
-        Object *newResource = new Object();
-        newResource->initDict(resDict);
-        pageDict->set("Resources", newResource);
+      Object *resDict = docs[i]->getCatalog()->getPage(j)->getResourceDictObject();
+      if (resDict->isDict()) {
+        pageDict->set("Resources", resDict->copy());
       }
-      pages.push_back(page);
+      pages.push_back(std::move(page));
       offsets.push_back(numOffset);
       docs[i]->markPageObjects(pageDict, yRef, countRef, numOffset, refPage->num, refPage->num);
-      Object annotsObj;
-      pageDict->lookupNF("Annots", &annotsObj);
+      Object annotsObj = pageDict->lookupNF("Annots");
       if (!annotsObj.isNull()) {
         docs[i]->markAnnotations(&annotsObj, yRef, countRef, numOffset, refPage->num, refPage->num);
-        annotsObj.free();
+      }
+    }
+    Object pageCatObj = docs[i]->getXRef()->getCatalog();
+    Dict *pageCatDict = pageCatObj.getDict();
+    Object pageNames = pageCatDict->lookup("Names");
+    if (!pageNames.isNull() && pageNames.isDict()) {
+      if (!names.isDict()) {
+        names = Object(new Dict(yRef));
+      }
+      doMergeNameDict(docs[i], yRef, countRef, 0, 0, names.getDict(), pageNames.getDict(), numOffset);
+    }
+    Object pageForm = pageCatDict->lookup("AcroForm");
+    if (i > 0 && !pageForm.isNull() && pageForm.isDict()) {
+      if (afObj.isNull()) {
+        afObj = pageCatDict->lookupNF("AcroForm");
+      } else if (afObj.isDict()) {
+        doMergeFormDict(afObj.getDict(), pageForm.getDict(), numOffset);
       }
     }
     objectsCount += docs[i]->writePageObjects(outStr, yRef, numOffset, gTrue);
@@ -239,27 +328,27 @@ int main (int argc, char *argv[])
   if (intents.isArray() && intents.arrayGetLength() > 0) {
     outStr->printf(" /OutputIntents [");
     for (j = 0; j < intents.arrayGetLength(); j++) {
-      Object intent;
-      intents.arrayGet(j, &intent, 0);
+      Object intent = intents.arrayGet(j, 0);
       if (intent.isDict()) {
         PDFDoc::writeObject(&intent, outStr, yRef, 0, NULL, cryptRC4, 0, 0, 0);
       }
-      intent.free();
     }
     outStr->printf("]");
   }
-  intents.free();
   // insert AcroForm
   if (!afObj.isNull()) {
     outStr->printf(" /AcroForm ");
     PDFDoc::writeObject(&afObj, outStr, yRef, 0, NULL, cryptRC4, 0, 0, 0);
-    afObj.free();
   }
   // insert OCProperties
   if (!ocObj.isNull() && ocObj.isDict()) {
     outStr->printf(" /OCProperties ");
     PDFDoc::writeObject(&ocObj, outStr, yRef, 0, NULL, cryptRC4, 0, 0, 0);
-    ocObj.free();
+  }
+  // insert Names
+  if (!names.isNull() && names.isDict()) {
+    outStr->printf(" /Names ");
+    PDFDoc::writeObject(&names, outStr, yRef, 0, NULL, cryptRC4, 0, 0, 0);
   }
   outStr->printf(">>\nendobj\n");
   objectsCount++;
@@ -281,15 +370,13 @@ int main (int argc, char *argv[])
       if (j > 0)
 	outStr->printf(" ");
       const char *key = pageDict->getKey(j);
-      Object value;
-      pageDict->getValNF(j, &value);
+      Object value = pageDict->getValNF(j);
       if (strcmp(key, "Parent") == 0) {
         outStr->printf("/Parent %d 0 R", rootNum + 1);
       } else {
         outStr->printf("/%s ", key);
         PDFDoc::writeObject(&value, outStr, yRef, offsets[i], NULL, cryptRC4, 0, 0, 0);
       }
-      value.free();
     }
     outStr->printf(" >>\nendobj\n");
     objectsCount++;
@@ -298,17 +385,16 @@ int main (int argc, char *argv[])
   Ref ref;
   ref.num = rootNum;
   ref.gen = 0;
-  Dict *trailerDict = PDFDoc::createTrailerDict(objectsCount, gFalse, 0, &ref, yRef,
+  Object trailerDict = PDFDoc::createTrailerDict(objectsCount, gFalse, 0, &ref, yRef,
                                                 fileName, outStr->getPos());
-  PDFDoc::writeXRefTableTrailer(trailerDict, yRef, gFalse /* do not write unnecessary entries */,
+  PDFDoc::writeXRefTableTrailer(std::move(trailerDict), yRef, gTrue, // write all entries according to ISO 32000-1, 7.5.4 Cross-Reference Table: "For a file that has never been incrementally updated, the cross-reference section shall contain only one subsection, whose object numbering begins at 0."
                                 uxrefOffset, outStr, yRef);
-  delete trailerDict;
 
   outStr->close();
+  delete outStr;
   fclose(f);
   delete yRef;
   delete countRef;
-  for (j = 0; j < (int) pages.size (); j++) pages[j].free();
   for (i = 0; i < (int) docs.size (); i++) delete docs[i];
   delete globalParams;
   return exitCode;

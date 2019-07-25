@@ -19,10 +19,11 @@
 // Copyright (C) 2008 Michael Vrable <mvrable@cs.ucsd.edu>
 // Copyright (C) 2008 Vasile Gaburici <gaburici@cs.umd.edu>
 // Copyright (C) 2010 William Bader <williambader@hotmail.com>
-// Copyright (C) 2010 Jakub Wilk <ubanus@users.sf.net>
+// Copyright (C) 2010 Jakub Wilk <jwilk@jwilk.net>
 // Copyright (C) 2012 Thomas Freitag <Thomas.Freitag@alfa.de>
-// Copyright (C) 2012 Adrian Johnson <ajohnson@redneon.com>
+// Copyright (C) 2012, 2017 Adrian Johnson <ajohnson@redneon.com>
 // Copyright (C) 2014 Jiri Slaby <jirislaby@gmail.com>
+// Copyright (C) 2015 Marek Kasik <mkasik@redhat.com>
 //
 // To see a description of the changes please see the Changelog file that
 // came with your tarball or type make ChangeLog if you are building from git
@@ -483,7 +484,7 @@ CharCodeToUnicode::CharCodeToUnicode() {
   sMapLen = sMapSize = 0;
   refCnt = 1;
   isIdentity = gFalse;
-#if MULTITHREADED
+#ifdef MULTITHREADED
   gInitMutex(&mutex);
 #endif
 }
@@ -501,7 +502,7 @@ CharCodeToUnicode::CharCodeToUnicode(GooString *tagA) {
   sMapLen = sMapSize = 0;
   refCnt = 1;
   isIdentity = gFalse;
-#if MULTITHREADED
+#ifdef MULTITHREADED
   gInitMutex(&mutex);
 #endif
 }
@@ -523,7 +524,7 @@ CharCodeToUnicode::CharCodeToUnicode(GooString *tagA, Unicode *mapA,
   sMapSize = sMapSizeA;
   refCnt = 1;
   isIdentity = gFalse;
-#if MULTITHREADED
+#ifdef MULTITHREADED
   gInitMutex(&mutex);
 #endif
 }
@@ -537,17 +538,17 @@ CharCodeToUnicode::~CharCodeToUnicode() {
     for (int i = 0; i < sMapLen; ++i) gfree(sMap[i].u);
     gfree(sMap);
   }
-#if MULTITHREADED
+#ifdef MULTITHREADED
   gDestroyMutex(&mutex);
 #endif
 }
 
 void CharCodeToUnicode::incRefCnt() {
-#if MULTITHREADED
+#ifdef MULTITHREADED
   gLockMutex(&mutex);
 #endif
   ++refCnt;
-#if MULTITHREADED
+#ifdef MULTITHREADED
   gUnlockMutex(&mutex);
 #endif
 }
@@ -555,11 +556,11 @@ void CharCodeToUnicode::incRefCnt() {
 void CharCodeToUnicode::decRefCnt() {
   GBool done;
 
-#if MULTITHREADED
+#ifdef MULTITHREADED
   gLockMutex(&mutex);
 #endif
   done = --refCnt == 0;
-#if MULTITHREADED
+#ifdef MULTITHREADED
   gUnlockMutex(&mutex);
 #endif
   if (done) {
@@ -656,7 +657,7 @@ int CharCodeToUnicode::mapToCharCode(Unicode* u, CharCode *c, int usize) {
       //compare the string char by char
       for (j=0; j<sMap[i].len; j++) {
         if (sMap[i].u[j] != u[j]) {
-          continue;
+          break;
         }
       }
 

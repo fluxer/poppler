@@ -229,6 +229,7 @@ poppler_action_copy (PopplerAction *action)
 	return new_action;
 }
 
+static
 PopplerDest *
 dest_new_goto (PopplerDocument *document,
 	       LinkDest        *link_dest)
@@ -431,9 +432,8 @@ find_annot_movie_for_action (PopplerDocument *document,
   if (link->hasAnnotRef ()) {
     Ref *ref = link->getAnnotRef ();
 
-    xref->fetch (ref->num, ref->gen, &annotObj);
+    annotObj = xref->fetch (ref->num, ref->gen);
   } else if (link->hasAnnotTitle ()) {
-    Object annots;
     GooString *title = link->getAnnotTitle ();
     int i;
 
@@ -441,52 +441,48 @@ find_annot_movie_for_action (PopplerDocument *document,
       Page *p = document->doc->getPage (i);
       if (!p) continue;
 
-      if (p->getAnnots (&annots)->isArray ()) {
+      Object annots = p->getAnnotsObject ();
+      if (annots.isArray ()) {
         int j;
 	GBool found = gFalse;
 
 	for (j = 0; j < annots.arrayGetLength () && !found; ++j) {
-          if (annots.arrayGet(j, &annotObj)->isDict()) {
-	    Object obj1;
-
-	    if (!annotObj.dictLookup ("Subtype", &obj1)->isName ("Movie")) {
-	      obj1.free ();
+          annotObj = annots.arrayGet(j);
+          if (annotObj.isDict()) {
+	    Object obj1 = annotObj.dictLookup ("Subtype");
+	    if (!obj1.isName ("Movie")) {
 	      continue;
 	    }
-	    obj1.free ();
 
-	    if (annotObj.dictLookup ("T", &obj1)->isString()) {
+	    obj1 = annotObj.dictLookup ("T");
+	    if (obj1.isString()) {
 	      GooString *t = obj1.getString ();
 
 	      if (title->cmp(t) == 0)
 	        found = gTrue;
 	    }
-	    obj1.free ();
 	  }
 	  if (!found)
-	    annotObj.free ();
+	    annotObj.setToNull ();
 	}
 	if (found) {
-	  annots.free ();
 	  break;
 	} else {
-          annotObj.free ();
+          annotObj.setToNull ();
 	}
       }
-      annots.free ();
     }
   }
 
   if (annotObj.isDict ()) {
     Object tmp;
 
-    annot = new AnnotMovie (document->doc, annotObj.getDict(), &tmp);
+    annot = new AnnotMovie (document->doc, &annotObj, &tmp);
     if (!annot->isOk ()) {
       delete annot;
       annot = NULL;
     }
   }
-  annotObj.free ();
 
   return annot;
 }
@@ -593,7 +589,7 @@ build_ocg_state (PopplerDocument *document,
 
 	for (i = 0; i < st_list->getLength(); ++i) {
 		LinkOCGState::StateList *list = (LinkOCGState::StateList *)st_list->get(i);
-		PopplerActionLayer *action_layer = g_new0 (PopplerActionLayer, 1);
+		PopplerActionLayer *action_layer = g_slice_new0 (PopplerActionLayer);
 
 		switch (list->st) {
 		case LinkOCGState::On:

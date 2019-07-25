@@ -1,5 +1,5 @@
 /* poppler-link.cc: qt interface to poppler
- * Copyright (C) 2006-2007, Albert Astals Cid
+ * Copyright (C) 2006-2007, 2016, 2017, Albert Astals Cid
  * Copyright (C) 2007-2008, Pino Toscano <pino@kde.org>
  * Copyright (C) 2010 Hib Eris <hib@hiberis.nl>
  * Copyright (C) 2012, Tobias Koenig <tokoe@kdab.com>
@@ -23,6 +23,7 @@
  */
 
 #include <poppler-qt4.h>
+#include <poppler-link-private.h>
 #include <poppler-private.h>
 #include <poppler-media.h>
 
@@ -33,7 +34,7 @@
 #include "Link.h"
 #include "Rendition.h"
 
-bool operator==( const Ref &r1, const Ref &r2 )
+static bool operator==( const Ref &r1, const Ref &r2 )
 {
 	return r1.num == r2.num && r1.gen == r2.gen;
 }
@@ -68,24 +69,6 @@ class LinkDestinationPrivate : public QSharedData
 		changeLeft = true;
 		changeTop = true;
 		changeZoom = false;
-	}
-
-class LinkPrivate
-{
-	public:
-		LinkPrivate( const QRectF &area );
-		virtual ~LinkPrivate();
-
-		QRectF linkArea;
-};
-
-	LinkPrivate::LinkPrivate( const QRectF &area )
-		: linkArea( area )
-	{
-	}
-
-	LinkPrivate::~LinkPrivate()
-	{
 	}
 
 class LinkGotoPrivate : public LinkPrivate
@@ -289,21 +272,23 @@ class LinkMoviePrivate : public LinkPrivate
 		d->changeZoom = ld->getChangeZoom();
 		
 		int leftAux = 0, topAux = 0, rightAux = 0, bottomAux = 0;
-		
-		::Page *page;
-		if (d->pageNum > 0 &&
-		    d->pageNum <= data.doc->doc->getNumPages() &&
-		    (page = data.doc->doc->getPage( d->pageNum )))
-		{
-			cvtUserToDev( page, left, top, &leftAux, &topAux );
-			cvtUserToDev( page, right, bottom, &rightAux, &bottomAux );
-			
-			d->left = leftAux / (double)page->getCropWidth();
-			d->top = topAux / (double)page->getCropHeight();
-			d->right = rightAux/ (double)page->getCropWidth();
-			d->bottom = bottomAux / (double)page->getCropHeight();
+
+		if (!data.externalDest) {
+			::Page *page;
+			if (d->pageNum > 0 &&
+				d->pageNum <= data.doc->doc->getNumPages() &&
+				(page = data.doc->doc->getPage( d->pageNum )))
+			{
+				cvtUserToDev( page, left, top, &leftAux, &topAux );
+				cvtUserToDev( page, right, bottom, &rightAux, &bottomAux );
+
+				d->left = leftAux / (double)page->getCropWidth();
+				d->top = topAux / (double)page->getCropHeight();
+				d->right = rightAux/ (double)page->getCropWidth();
+				d->bottom = bottomAux / (double)page->getCropHeight();
+			}
+			else d->pageNum = 0;
 		}
-		else d->pageNum = 0;
 		
 		if (deleteDest) delete ld;
 	}
@@ -707,5 +692,19 @@ class LinkMoviePrivate : public LinkPrivate
 		}
 
 		return false;
+	}
+
+	LinkOCGState::LinkOCGState( LinkOCGStatePrivate *ocgp )
+		: Link ( *ocgp )
+	{
+	}
+
+	LinkOCGState::~LinkOCGState()
+	{
+	}
+
+	Link::LinkType LinkOCGState::linkType() const
+	{
+		return OCGState;
 	}
 }

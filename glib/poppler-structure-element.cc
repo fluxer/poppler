@@ -36,12 +36,11 @@
  * SECTION:poppler-structure-element
  * @short_description: Document structure element.
  * @title: PopplerStructureElement
- * @see_also: #PopplerStructure
  *
  * Instances of #PopplerStructureElement are used to describe the structure
  * of a #PopplerDocument. To access the elements in the structure of the
  * document, use poppler_structure_element_iter_new() to obtain an iterator
- * for the top-level #PopplerStructure, and then use the
+ * for the top-level #PopplerStructureElement, and then use the
  * #PopplerStructureElementIter methods to traverse the structure tree.
  */
 
@@ -50,7 +49,7 @@ typedef struct _PopplerStructureElementClass
   GObjectClass parent_class;
 } PopplerStructureElementClass;
 
-G_DEFINE_TYPE (PopplerStructureElement, poppler_structure_element, G_TYPE_OBJECT);
+G_DEFINE_TYPE (PopplerStructureElement, poppler_structure_element, G_TYPE_OBJECT)
 
 static PopplerStructureElement *
 _poppler_structure_element_new (PopplerDocument *document, StructElement *element)
@@ -1214,9 +1213,8 @@ convert_border_style (Object *object, PopplerStructureBorderStyle *values)
       g_assert (object->arrayGetLength () == 4);
       for (guint i = 0; i < 4; i++)
         {
-          Object item;
-          values[i] = name_to_enum<PopplerStructureBorderStyle> (object->arrayGet (i, &item));
-          item.free ();
+          Object item = object->arrayGet (i);
+          values[i] = name_to_enum<PopplerStructureBorderStyle> (&item);
         }
     }
   else
@@ -1262,9 +1260,7 @@ convert_doubles_array (Object *object, gdouble **values, guint *n_values)
 
   for (guint i = 0; i < *n_values; i++)
     {
-      Object item;
-      doubles[i] = object->arrayGet (i, &item)->getNum ();
-      item.free ();
+      doubles[i] = object->arrayGet (i).getNum ();
     }
 }
 
@@ -1274,16 +1270,9 @@ convert_color (Object *object, PopplerColor *color)
   g_assert (color != NULL);
   g_assert (object->isArray () && object->arrayGetLength () != 3);
 
-  Object item;
-
-  color->red = object->arrayGet (0, &item)->getNum () * 65535;
-  item.free ();
-
-  color->green = object->arrayGet (1, &item)->getNum () * 65535;
-  item.free ();
-
-  color->blue = object->arrayGet (2, &item)->getNum () * 65535;
-  item.free ();
+  color->red = object->arrayGet (0).getNum () * 65535;
+  color->green = object->arrayGet (1).getNum () * 65535;
+  color->blue = object->arrayGet (2).getNum () * 65535;
 }
 
 /**
@@ -1378,9 +1367,8 @@ poppler_structure_element_get_border_color (PopplerStructureElement *poppler_str
       // One color per side.
       for (guint i = 0; i < 4; i++)
         {
-          Object item;
-          convert_color (value->arrayGet (i, &item), &colors[i]);
-          item.free ();
+          Object item = value->arrayGet (i);
+          convert_color (&item, &colors[i]);
         }
     }
   else
@@ -1404,9 +1392,7 @@ convert_double_or_4_doubles (Object *object, gdouble *value)
       g_assert (object->arrayGetLength () == 4);
       for (guint i = 0; i < 4; i++)
         {
-          Object item;
-          value[i] = object->arrayGet (i, &item)->getNum ();
-          item.free ();
+          value[i] = object->arrayGet (i).getNum ();
         }
     }
   else
@@ -1816,7 +1802,7 @@ poppler_structure_element_get_text_decoration_color (PopplerStructureElement *po
  * If this attribute is not specified, it shall be derived from the current
  * stroke thickness in effect at the start of the element’s associated content.
  *
- * Return value: Thickness of the text decoration, or %NaN if not defined.
+ * Return value: Thickness of the text decoration, or NAN if not defined.
  *
  * Since: 0.26
  */
@@ -1935,10 +1921,10 @@ poppler_structure_element_get_column_count (PopplerStructureElement *poppler_str
  * array of elements: the first one is the size of the gap in between
  * columns 1 and 2, second is the size between columns 2 and 3, and so on.
  *
- * For elements which use a single column, %NULL is returned and %n_values
+ * For elements which use a single column, %NULL is returned and @n_values
  * is set to zero.
  *
- * If the attribute is undefined, %NULL is returned and %n_values is set
+ * If the attribute is undefined, %NULL is returned and @n_values is set
  * to a non-zero value.
  *
  * The array with the results is allocated by the function. When it is
@@ -2176,16 +2162,14 @@ poppler_structure_element_get_table_headers (PopplerStructureElement *poppler_st
 
   for (guint i = 0; i < n_values; i++)
     {
-      Object item;
+      Object item = value->arrayGet (i);
 
-      if (value->arrayGet (i, &item)->isString ())
+      if (item.isString ())
         result[i] = _poppler_goo_string_to_utf8 (item.getString ());
       else if (item.isName ())
         result[i] = g_strdup (item.getName ());
       else
         g_assert_not_reached ();
-
-      item.free ();
     }
 
   return result;
@@ -2197,7 +2181,7 @@ poppler_structure_element_get_table_headers (PopplerStructureElement *poppler_st
  *
  * Obtains the scope of a table structure element.
  *
- * Return value: A #PopplerStructureScope value.
+ * Return value: A #PopplerStructureTableScope value.
  *
  * Since: 0.26
  */

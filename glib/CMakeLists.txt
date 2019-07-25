@@ -16,7 +16,7 @@ configure_file(poppler-features.h.cmake ${CMAKE_CURRENT_BINARY_DIR}/poppler-feat
 
 if (GTK_FOUND AND BUILD_GTK_TESTS)
   add_subdirectory(demo)
-endif (GTK_FOUND AND BUILD_GTK_TESTS)
+endif ()
 
 set(poppler_glib_public_headers
   poppler-action.h
@@ -81,12 +81,16 @@ set(poppler_glib_generated_SRCS
   ${CMAKE_SOURCE_DIR}/poppler/CairoRescaleBox.cc
 )
 add_library(poppler-glib SHARED ${poppler_glib_SRCS} ${poppler_glib_generated_SRCS})
-set_target_properties(poppler-glib PROPERTIES VERSION 8.6.0 SOVERSION 8)
-target_link_libraries(poppler-glib poppler ${GLIB2_LIBRARIES} ${CAIRO_LIBRARIES} ${FREETYPE_LIBRARIES})
-if(HAVE_PTHREAD)
-   target_link_libraries(poppler-glib -lpthread)
+set_target_properties(poppler-glib PROPERTIES VERSION 8.9.0 SOVERSION 8)
+if(MINGW)
+    get_target_property(POPPLER_GLIB_SOVERSION poppler-glib SOVERSION)
+    set_target_properties(poppler-glib PROPERTIES SUFFIX "-${POPPLER_GLIB_SOVERSION}${CMAKE_SHARED_LIBRARY_SUFFIX}")
 endif()
-install(TARGETS poppler-glib RUNTIME DESTINATION bin LIBRARY DESTINATION lib${LIB_SUFFIX} ARCHIVE DESTINATION lib${LIB_SUFFIX})
+target_link_libraries(poppler-glib poppler ${GLIB2_LIBRARIES} ${CAIRO_LIBRARIES} ${FREETYPE_LIBRARIES})
+if(CMAKE_USE_PTHREADS_INIT)
+   target_link_libraries(poppler-glib Threads::Threads)
+endif()
+install(TARGETS poppler-glib RUNTIME DESTINATION bin LIBRARY DESTINATION ${CMAKE_INSTALL_LIBDIR} ARCHIVE DESTINATION ${CMAKE_INSTALL_LIBDIR})
 
 install(FILES
   ${poppler_glib_public_headers}
@@ -118,7 +122,7 @@ if (HAVE_INTROSPECTION)
   set(Poppler_0_18_gir_INCLUDES GObject-2.0 Gio-2.0 cairo-1.0)
   get_directory_property(_tmp_includes INCLUDE_DIRECTORIES)
   _list_prefix(_includes _tmp_includes "-I")
-  set(Poppler_0_18_gir_CFLAGS ${_includes})
+  set(Poppler_0_18_gir_CFLAGS ${_includes} -L${CMAKE_BINARY_DIR})
   set(Poppler_0_18_gir_LIBS poppler-glib)
   _list_prefix(_abs_introspection_files introspection_files "${CMAKE_CURRENT_SOURCE_DIR}/")
   list(APPEND _abs_introspection_files
@@ -134,3 +138,7 @@ if (HAVE_INTROSPECTION)
 
   gir_add_introspections(INTROSPECTION_GIRS)
 endif ()
+
+if(ENABLE_GTK_DOC)
+  add_subdirectory(reference)
+endif()

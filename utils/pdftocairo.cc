@@ -19,16 +19,17 @@
 // Copyright (C) 2009 Shen Liang <shenzhuxi@gmail.com>
 // Copyright (C) 2009 Stefan Thomas <thomas@eload24.com>
 // Copyright (C) 2009, 2010 Albert Astals Cid <aacid@kde.org>
-// Copyright (C) 2010, 2011-2014 Adrian Johnson <ajohnson@redneon.com>
+// Copyright (C) 2010, 2011-2017 Adrian Johnson <ajohnson@redneon.com>
 // Copyright (C) 2010, 2014 Hib Eris <hib@hiberis.nl>
 // Copyright (C) 2010 Jonathan Liu <net147@gmail.com>
 // Copyright (C) 2010 William Bader <williambader@hotmail.com>
 // Copyright (C) 2011 Thomas Freitag <Thomas.Freitag@alfa.de>
-// Copyright (C) 2011 Carlos Garcia Campos <carlosgc@gnome.org>
+// Copyright (C) 2011, 2015 Carlos Garcia Campos <carlosgc@gnome.org>
 // Copyright (C) 2012 Koji Otani <sho@bbr.jp>
 // Copyright (C) 2013 Lu Wang <coolwanglu@gmail.com>
 // Copyright (C) 2013 Suzuki Toshiya <mpsuzuki@hiroshima-u.ac.jp>
 // Copyright (C) 2014 Rodrigo Rivas Costa <rodrigorivascosta@gmail.com>
+// Copyright (C) 2016 Jason Crain <jason@aquaticape.us>
 //
 // To see a description of the changes please see the Changelog file that
 // came with your tarball or type make ChangeLog if you are building from git
@@ -37,13 +38,13 @@
 
 #include "config.h"
 #include <poppler-config.h>
+#include <cstdint>
 #include <stdio.h>
 #include <math.h>
 #include <string.h>
 #include "parseargs.h"
 #include "goo/gmem.h"
 #include "goo/gtypes.h"
-#include "goo/gtypes_p.h"
 #include "goo/GooString.h"
 #include "goo/ImgWriter.h"
 #include "goo/JpegWriter.h"
@@ -54,7 +55,7 @@
 #include "PDFDoc.h"
 #include "PDFDocFactory.h"
 #include "CairoOutputDev.h"
-#if USE_CMS
+#ifdef USE_CMS
 #ifdef USE_LCMS1
 #include <lcms.h>
 #else
@@ -62,13 +63,13 @@
 #endif
 #endif
 #include <cairo.h>
-#if CAIRO_HAS_PS_SURFACE
+#ifdef CAIRO_HAS_PS_SURFACE
 #include <cairo-ps.h>
 #endif
-#if CAIRO_HAS_PDF_SURFACE
+#ifdef CAIRO_HAS_PDF_SURFACE
 #include <cairo-pdf.h>
 #endif
-#if CAIRO_HAS_SVG_SURFACE
+#ifdef CAIRO_HAS_SVG_SURFACE
 #include <cairo-svg.h>
 #endif
 
@@ -105,6 +106,7 @@ static GBool useCropBox = gFalse;
 static GBool mono = gFalse;
 static GBool gray = gFalse;
 static GBool transp = gFalse;
+static GooString antialias;
 static GooString icc;
 
 static GBool level2 = gFalse;
@@ -126,6 +128,10 @@ static GBool quiet = gFalse;
 static GBool printVersion = gFalse;
 static GBool printHelp = gFalse;
 
+static GooString jpegOpt;
+static int jpegQuality = -1;
+static bool jpegProgressive = false;
+
 static GooString printer;
 static GooString printOpt;
 #ifdef CAIRO_HAS_WIN32_SURFACE
@@ -133,31 +139,33 @@ static GBool setupdlg = gFalse;
 #endif
 
 static const ArgDesc argDesc[] = {
-#if ENABLE_LIBPNG
+#ifdef ENABLE_LIBPNG
   {"-png",    argFlag,     &png,           0,
    "generate a PNG file"},
 #endif
-#if ENABLE_LIBJPEG
+#ifdef ENABLE_LIBJPEG
   {"-jpeg",   argFlag,     &jpeg,           0,
    "generate a JPEG file"},
+  {"-jpegopt",  argGooString, &jpegOpt,    0,
+   "jpeg options, with format <opt1>=<val1>[,<optN>=<valN>]*"},
 #endif
-#if ENABLE_LIBTIFF
+#ifdef ENABLE_LIBTIFF
   {"-tiff",    argFlag,     &tiff,           0,
    "generate a TIFF file"},
   {"-tiffcompression", argString, tiffCompressionStr, sizeof(tiffCompressionStr),
    "set TIFF compression: none, packbits, jpeg, lzw, deflate"},
 #endif
-#if CAIRO_HAS_PS_SURFACE
+#ifdef CAIRO_HAS_PS_SURFACE
   {"-ps",     argFlag,     &ps,            0,
    "generate PostScript file"},
   {"-eps",        argFlag,     &eps,          0,
    "generate Encapsulated PostScript (EPS)"},
 #endif
-#if CAIRO_HAS_PDF_SURFACE
+#ifdef CAIRO_HAS_PDF_SURFACE
   {"-pdf",    argFlag,     &pdf,           0,
    "generate a PDF file"},
 #endif
-#if CAIRO_HAS_SVG_SURFACE
+#ifdef CAIRO_HAS_SVG_SURFACE
   {"-svg",    argFlag,     &svg,           0,
    "generate a Scalable Vector Graphics (SVG) file"},
 #endif
@@ -217,7 +225,9 @@ static const ArgDesc argDesc[] = {
    "generate a grayscale image file (PNG, JPEG)"},
   {"-transp",   argFlag,     &transp,          0,
    "use a transparent background instead of white (PNG)"},
-#if USE_CMS
+  {"-antialias",   argGooString,     &antialias,          0,
+   "set cairo antialias option"},
+#ifdef USE_CMS
   {"-icc",   argGooString,     &icc,          0,
    "ICC color profile to use"},
 #endif
@@ -270,14 +280,106 @@ static  cairo_surface_t *surface;
 static  GBool printing;
 static  FILE *output_file;
 static GBool usePDFPageSize;
+static cairo_antialias_t antialiasEnum = CAIRO_ANTIALIAS_DEFAULT;
 
-#if USE_CMS
+#ifdef USE_CMS
 static unsigned char *icc_data;
 static int icc_data_size;
 static cmsHPROFILE profile;
 #endif
 
-void writePageImage(GooString *filename)
+struct AntiliasOption
+{
+  const char *name;
+  cairo_antialias_t value;
+};
+
+static const AntiliasOption antialiasOptions[] =
+{
+  { "default",  CAIRO_ANTIALIAS_DEFAULT },
+  { "none",     CAIRO_ANTIALIAS_NONE },
+  { "gray",     CAIRO_ANTIALIAS_GRAY },
+  { "subpixel", CAIRO_ANTIALIAS_SUBPIXEL },
+  { "fast",     CAIRO_ANTIALIAS_FAST },
+  { "good",     CAIRO_ANTIALIAS_GOOD },
+  { "best",     CAIRO_ANTIALIAS_BEST },
+  { NULL,       CAIRO_ANTIALIAS_DEFAULT },
+};
+
+static GBool parseAntialiasOption(GooString *antialias, cairo_antialias_t *antialiasEnum)
+{
+  const AntiliasOption *option = antialiasOptions;
+  while (option->name) {
+    if (antialias->cmp(option->name) == 0) {
+      *antialiasEnum = option->value;
+      return gTrue;
+    }
+    option++;
+  }
+
+  fprintf(stderr, "Error: Invalid antialias option \"%s\"\n", antialias->getCString());
+  fprintf(stderr, "Valid options are:\n");
+  option = antialiasOptions;
+  while (option->name) {
+    fprintf(stderr, "  %s\n", option->name);
+    option++;
+  }
+  return gFalse;
+}
+
+static GBool parseJpegOptions()
+{
+  //jpegOpt format is: <opt1>=<val1>,<opt2>=<val2>,...
+  const char *nextOpt = jpegOpt.getCString();
+  while (nextOpt && *nextOpt)
+  {
+    const char *comma = strchr(nextOpt, ',');
+    GooString opt;
+    if (comma) {
+      opt.Set(nextOpt, comma - nextOpt);
+      nextOpt = comma + 1;
+    } else {
+      opt.Set(nextOpt);
+      nextOpt = NULL;
+    }
+    //here opt is "<optN>=<valN> "
+    const char *equal = strchr(opt.getCString(), '=');
+    if (!equal) {
+      fprintf(stderr, "Unknown jpeg option \"%s\"\n", opt.getCString());
+      return gFalse;
+    }
+    int iequal = equal - opt.getCString();
+    GooString value(&opt, iequal + 1, opt.getLength() - iequal - 1);
+    opt.del(iequal, opt.getLength() - iequal);
+    //here opt is "<optN>" and value is "<valN>"
+
+    if (opt.cmp("quality") == 0) {
+      if (!isInt(value.getCString())) {
+	fprintf(stderr, "Invalid jpeg quality\n");
+	return gFalse;
+      }
+      jpegQuality = atoi(value.getCString());
+      if (jpegQuality < 0 || jpegQuality > 100) {
+	fprintf(stderr, "jpeg quality must be between 0 and 100\n");
+	return gFalse;
+      }
+    } else if (opt.cmp("progressive") == 0) {
+      jpegProgressive = gFalse;
+      if (value.cmp("y") == 0) {
+	jpegProgressive = gTrue;
+      } else if (value.cmp("n") != 0) {
+	fprintf(stderr, "jpeg progressive option must be \"y\" or \"n\"\n");
+	return gFalse;
+      }
+    } else {
+      fprintf(stderr, "Unknown jpeg option \"%s\"\n", opt.getCString());
+      return gFalse;
+    }
+  }
+  return gTrue;
+}
+
+static void writePageImage(GooString *filename)
 {
   ImgWriter *writer = 0;
   FILE *file;
@@ -285,7 +387,7 @@ void writePageImage(GooString *filename)
   unsigned char *data;
 
   if (png) {
-#if ENABLE_LIBPNG
+#ifdef ENABLE_LIBPNG
     if (transp)
       writer = new PNGWriter(PNGWriter::RGBA);
     else if (gray)
@@ -295,7 +397,7 @@ void writePageImage(GooString *filename)
     else
       writer = new PNGWriter(PNGWriter::RGB);
 
-#if USE_CMS
+#ifdef USE_CMS
 #ifdef USE_LCMS1
     if (icc_data)
       static_cast<PNGWriter*>(writer)->setICCProfile(cmsTakeProductName(profile), icc_data, icc_data_size);
@@ -316,14 +418,18 @@ void writePageImage(GooString *filename)
 #endif
 
   } else if (jpeg) {
-#if ENABLE_LIBJPEG
+#ifdef ENABLE_LIBJPEG
     if (gray)
       writer = new JpegWriter(JpegWriter::GRAY);
     else
       writer = new JpegWriter(JpegWriter::RGB);
+
+    static_cast<JpegWriter*>(writer)->setProgressive(jpegProgressive);
+    if (jpegQuality >= 0)
+      static_cast<JpegWriter*>(writer)->setQuality(jpegQuality);
 #endif
   } else if (tiff) {
-#if ENABLE_LIBTIFF
+#ifdef ENABLE_LIBTIFF
     if (transp)
       writer = new TiffWriter(TiffWriter::RGBA_PREMULTIPLIED);
     else if (gray)
@@ -351,6 +457,7 @@ void writePageImage(GooString *filename)
   height = cairo_image_surface_get_height(surface);
   width = cairo_image_surface_get_width(surface);
   stride = cairo_image_surface_get_stride(surface);
+  cairo_surface_flush(surface);
   data = cairo_image_surface_get_data(surface);
 
   if (!writer->init(file, width, height, x_resolution, y_resolution)) {
@@ -447,8 +554,13 @@ static void getOutputSize(double page_w, double page_h, double *width, double *h
       *width = page_w;
       *height = page_h;
     } else {
-      *width = paperWidth;
-      *height = paperHeight;
+      if (page_w > page_h) {
+	*width = paperHeight;
+	*height = paperWidth;
+      } else {
+	*width = paperWidth;
+	*height = paperHeight;
+      }
     }
   } else {
     getCropSize(page_w * (x_resolution / 72.0),
@@ -470,27 +582,20 @@ static void getFitToPageTransform(double page_w, double page_h,
   else
     scale = y_scale;
 
+  if (scale > 1.0 && !expand)
+    scale = 1.0;
+  if (scale < 1.0 && noShrink)
+    scale = 1.0;
+
   cairo_matrix_init_identity (m);
-  if (scale > 1.0) {
-    // page is smaller than paper
-    if (expand) {
-      // expand to fit
-      cairo_matrix_scale (m, scale, scale);
-    } else if (!noCenter) {
-      // centre page
-      cairo_matrix_translate (m, (paper_w - page_w)/2, (paper_h - page_h)/2);
-    } else {
-      if (!svg) {
-	// move to PostScript origin
-	cairo_matrix_translate (m, 0, (paper_h - page_h));
-      }
-    }
-  } else if (scale < 1.0)
-    // page is larger than paper
-    if (!noShrink) {
-      // shrink to fit
-      cairo_matrix_scale (m, scale, scale);
-    }
+  if (!noCenter) {
+    // centre page
+    cairo_matrix_translate (m, (paper_w - page_w*scale)/2, (paper_h - page_h*scale)/2);
+  } else if (!svg) {
+    // move to PostScript origin
+    cairo_matrix_translate (m, 0, (paper_h - page_h*scale));
+  }
+  cairo_matrix_scale (m, scale, scale);
 }
 
 static cairo_status_t writeStream(void *closure, const unsigned char *data, unsigned int length)
@@ -522,7 +627,7 @@ static void beginDocument(GooString *inputFileName, GooString *outputFileName, d
     }
 
     if (ps || eps) {
-#if CAIRO_HAS_PS_SURFACE
+#ifdef CAIRO_HAS_PS_SURFACE
       surface = cairo_ps_surface_create_for_stream(writeStream, output_file, w, h);
       if (level2)
 	cairo_ps_surface_restrict_to_level (surface, CAIRO_PS_LEVEL_2);
@@ -536,11 +641,11 @@ static void beginDocument(GooString *inputFileName, GooString *outputFileName, d
       cairo_ps_surface_dsc_begin_page_setup (surface);
 #endif
     } else if (pdf) {
-#if CAIRO_HAS_PDF_SURFACE
+#ifdef CAIRO_HAS_PDF_SURFACE
       surface = cairo_pdf_surface_create_for_stream(writeStream, output_file, w, h);
 #endif
     } else if (svg) {
-#if CAIRO_HAS_SVG_SURFACE
+#ifdef CAIRO_HAS_SVG_SURFACE
       surface = cairo_svg_surface_create_for_stream(writeStream, output_file, w, h);
       cairo_svg_surface_restrict_to_version (surface, CAIRO_SVG_VERSION_1_2);
 #endif
@@ -556,7 +661,7 @@ static void beginPage(double *w, double *h)
 {
   if (printing) {
     if (ps || eps) {
-#if CAIRO_HAS_PS_SURFACE
+#ifdef CAIRO_HAS_PS_SURFACE
       if (*w > *h) {
 	cairo_ps_surface_dsc_comment (surface, "%%PageOrientation: Landscape");
 	cairo_ps_surface_set_size (surface, *h, *w);
@@ -567,7 +672,7 @@ static void beginPage(double *w, double *h)
 #endif
     }
 
-#if CAIRO_HAS_PDF_SURFACE
+#ifdef CAIRO_HAS_PDF_SURFACE
     if (pdf)
       cairo_pdf_surface_set_size (surface, *w, *h);
 #endif
@@ -597,8 +702,10 @@ static void renderPage(PDFDoc *doc, CairoOutputDev *cairoOut, int pg,
   cairo_matrix_t m;
 
   cr = cairo_create(surface);
+
   cairoOut->setCairo(cr);
   cairoOut->setPrinting(printing);
+  cairoOut->setAntialias(antialiasEnum);
 
   cairo_save(cr);
   if (ps && output_w > output_h) {
@@ -640,7 +747,7 @@ static void renderPage(PDFDoc *doc, CairoOutputDev *cairoOut, int pg,
 
   status = cairo_status(cr);
   if (status)
-      error(errInternal, -1, "cairo error: {0:s}\n", cairo_status_to_string(status));
+    fprintf(stderr, "cairo error: %s\n", cairo_status_to_string(status));
   cairo_destroy (cr);
 }
 
@@ -661,7 +768,7 @@ static void endPage(GooString *imageFileName)
     cairo_surface_finish(surface);
     status = cairo_surface_status(surface);
     if (status)
-      error(errInternal, -1, "cairo error: {0:s}\n", cairo_status_to_string(status));
+      fprintf(stderr, "cairo error: %s\n", cairo_status_to_string(status));
     cairo_surface_destroy(surface);
   }
 
@@ -675,7 +782,7 @@ static void endDocument()
     cairo_surface_finish(surface);
     status = cairo_surface_status(surface);
     if (status)
-      error(errInternal, -1, "cairo error: {0:s}\n", cairo_status_to_string(status));
+      fprintf(stderr, "cairo error: %s\n", cairo_status_to_string(status));
     cairo_surface_destroy(surface);
 #ifdef CAIRO_HAS_WIN32_SURFACE
     if (printToWin32)
@@ -727,12 +834,14 @@ static GooString *getImageFileName(GooString *outputFileName, int numDigits, int
     snprintf(buf, sizeof(buf), "-%0*d", numDigits, page);
     imageName->append(buf);
   }
-  if (png)
-    imageName->append(".png");
-  else if (jpeg)
-    imageName->append(".jpg");
-  else if (tiff)
-    imageName->append(".tif");
+  if (outputFileName->cmp("fd://0") != 0) {
+    if (png)
+      imageName->append(".png");
+    else if (jpeg)
+      imageName->append(".jpg");
+    else if (tiff)
+      imageName->append(".tif");
+  }
 
   return imageName;
 }
@@ -834,8 +943,10 @@ int main(int argc, char *argv[]) {
   int num_outputs;
 
   // parse args
-  if (!parseArgs(argDesc, &argc, argv))
+  if (!parseArgs(argDesc, &argc, argv)) {
+    printUsage("pdftocairo", 0, argDesc);
     exit(99);
+  }
 
   if ( resolution != 0.0 &&
        (x_resolution == 150.0 ||
@@ -885,6 +996,9 @@ int main(int argc, char *argv[]) {
     checkInvalidPrintOption(icc.getCString()[0], "-icc");
     checkInvalidPrintOption(singleFile, "-singlefile");
     checkInvalidPrintOption(useCropBox, "-cropbox");
+    checkInvalidPrintOption(scaleTo != 0, "-scale-to");
+    checkInvalidPrintOption(x_scaleTo != 0, "-scale-to-x");
+    checkInvalidPrintOption(y_scaleTo != 0, "-scale-to-y");
   } else {
     checkInvalidImageOption(level2, "-level2");
     checkInvalidImageOption(level3, "-level3");
@@ -907,6 +1021,11 @@ int main(int argc, char *argv[]) {
     exit(99);
   }
 
+  if (antialias.getLength() > 0) {
+    if (!parseAntialiasOption(&antialias, &antialiasEnum))
+      exit(99);
+  }
+
   if (transp && !(png || tiff)) {
     fprintf(stderr, "Error: -transp may only be used with png or tiff output.\n");
     exit(99);
@@ -920,6 +1039,15 @@ int main(int argc, char *argv[]) {
   if (mono && !(png || tiff)) {
     fprintf(stderr, "Error: -mono may only be used with png or tiff output.\n");
     exit(99);
+  }
+
+  if (jpegOpt.getLength() > 0) {
+    if (!jpeg) {
+      fprintf(stderr, "Error: -jpegopt may only be used with jpeg output.\n");
+      exit(99);
+    }
+    if (!parseJpegOptions())
+      exit(99);
   }
 
   if (strlen(tiffCompressionStr) > 0 && !tiff) {
@@ -936,6 +1064,11 @@ int main(int argc, char *argv[]) {
 
   if (eps && (origPageSizes || paperSize[0] || paperWidth > 0 || paperHeight > 0)) {
     fprintf(stderr, "Error: page size options may not be used with eps output.\n");
+    exit(99);
+  }
+
+  if ((paperWidth > 0 && paperHeight <= 0) || (paperWidth <= 0 && paperHeight > 0)) {
+    fprintf(stderr, "Error: both -paperw and -paperh must be specified.\n");
     exit(99);
   }
 
@@ -986,7 +1119,7 @@ int main(int argc, char *argv[]) {
 
   outputFileName = getOutputFileName(fileName, outputName);
 
-#if USE_CMS
+#ifdef USE_CMS
   icc_data = NULL;
   if (icc.getCString()[0]) {
     FILE *file = fopen(icc.getCString(), "rb");
@@ -1101,6 +1234,11 @@ int main(int argc, char *argv[]) {
       }
     }
 
+    if ((doc->getPageRotate(pg) == 90) || (doc->getPageRotate(pg) == 270)) {
+      tmp = pg_w;
+      pg_w = pg_h;
+      pg_h = tmp;
+    }
     if (scaleTo != 0) {
       resolution = (72.0 * scaleTo) / (pg_w > pg_h ? pg_w : pg_h);
       x_resolution = y_resolution = resolution;
@@ -1115,11 +1253,6 @@ int main(int argc, char *argv[]) {
         if (x_scaleTo == -1)
           x_resolution = y_resolution;
       }
-    }
-    if ((doc->getPageRotate(pg) == 90) || (doc->getPageRotate(pg) == 270)) {
-      tmp = pg_w;
-      pg_w = pg_h;
-      pg_h = tmp;
     }
     if (imageFileName) {
       delete imageFileName;
@@ -1152,9 +1285,9 @@ int main(int argc, char *argv[]) {
   if (ownerPW)
     delete ownerPW;
   if (userPW)
-    delete ownerPW;
+    delete userPW;
 
-#if USE_CMS
+#ifdef USE_CMS
   cmsCloseProfile(profile);
   if (icc_data)
     gfree(icc_data);

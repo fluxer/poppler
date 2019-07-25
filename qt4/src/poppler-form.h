@@ -21,7 +21,7 @@
 #ifndef _POPPLER_QT4_FORM_H_
 #define _POPPLER_QT4_FORM_H_
 
-#include <QtCore/QRect>
+#include <QtCore/QRectF>
 #include <QtCore/QStringList>
 #include "poppler-export.h"
 

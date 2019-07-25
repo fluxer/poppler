@@ -1,6 +1,6 @@
 #include <QtCore/QDebug>
 #include <QtCore/QDir>
-#include <QtCore/QDateTime>
+#include <QtCore/QTime>
 #include <QtGui/QApplication>
 #include <QtGui/QImage>
 

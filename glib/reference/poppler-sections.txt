@@ -134,13 +134,21 @@ poppler_document_get_id
 poppler_document_get_pdf_version_string
 poppler_document_get_pdf_version
 poppler_document_get_title
+poppler_document_set_title
 poppler_document_get_author
+poppler_document_set_author
 poppler_document_get_subject
+poppler_document_set_subject
 poppler_document_get_keywords
+poppler_document_set_keywords
 poppler_document_get_creator
+poppler_document_set_creator
 poppler_document_get_producer
+poppler_document_set_producer
 poppler_document_get_creation_date
+poppler_document_set_creation_date
 poppler_document_get_modification_date
+poppler_document_set_modification_date
 poppler_document_get_page_layout
 poppler_document_get_page_mode
 poppler_document_get_permissions
@@ -341,22 +349,6 @@ poppler_form_text_type_get_type
 </SECTION>
 
 <SECTION>
-<FILE>poppler</FILE>
-POPPLER_ERROR
-PopplerError
-PopplerOrientation
-
-<SUBSECTION Standard>
-POPPLER_TYPE_ERROR
-POPPLER_TYPE_ORIENTATION
-
-<SUBSECTION Private>
-POPPLER_DEFINE_BOXED_TYPE
-poppler_error_get_type
-poppler_error_quark
-</SECTION>
-
-<SECTION>
 <FILE>poppler-annot</FILE>
 <TITLE>PopplerAnnot</TITLE>
 PopplerAnnot
@@ -401,6 +393,7 @@ poppler_annot_markup_set_popup
 poppler_annot_markup_get_popup_is_open
 poppler_annot_markup_set_popup_is_open
 poppler_annot_markup_get_popup_rectangle
+poppler_annot_markup_set_popup_rectangle
 poppler_annot_markup_get_date
 poppler_annot_markup_get_external_data
 poppler_annot_markup_get_reply_to
@@ -562,16 +555,20 @@ poppler_media_get_type
 <FILE>poppler-movie</FILE>
 <TITLE>PopplerMovie</TITLE>
 PopplerMovie
+PopplerMoviePlayMode
 poppler_movie_get_filename
 poppler_movie_need_poster
 poppler_movie_show_controls
+poppler_movie_get_play_mode
 
 <SUBSECTION Standard>
 POPPLER_MOVIE
 POPPLER_IS_MOVIE
 POPPLER_TYPE_MOVIE
+POPPLER_TYPE_MOVIE_PLAY_MODE
 <SUBSECTION Private>
 poppler_movie_get_type
+poppler_movie_play_mode_get_type
 
 </SECTION>
 
@@ -750,4 +747,17 @@ POPPLER_TYPE_BACKEND
 
 <SUBSECTION Private>
 poppler_backend_get_type
+</SECTION>
+
+<SECTION>
+<FILE>poppler-errors</FILE>
+POPPLER_ERROR
+PopplerError
+
+<SUBSECTION Standard>
+POPPLER_TYPE_ERROR
+
+<SUBSECTION Private>
+poppler_error_get_type
+poppler_error_quark
 </SECTION>

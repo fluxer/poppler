@@ -23,8 +23,8 @@
 #define _POPPLER_ANNOTATION_PRIVATE_H_
 
 #include <QtCore/QLinkedList>
-#include <QtCore/QPoint>
-#include <QtCore/QSharedData>
+#include <QtCore/QPointF>
+#include <QtCore/QSharedDataPointer>
 
 #include "poppler-annotation.h"
 

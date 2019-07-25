@@ -1,7 +1,7 @@
 /* poppler-page.cc: qt interface to poppler
  * Copyright (C) 2005, Net Integration Technologies, Inc.
  * Copyright (C) 2005, Brad Hards <bradh@frogmouth.net>
- * Copyright (C) 2005-2015, Albert Astals Cid <aacid@kde.org>
+ * Copyright (C) 2005-2017, Albert Astals Cid <aacid@kde.org>
  * Copyright (C) 2005, Stefan Kebekus <stefan.kebekus@math.uni-koeln.de>
  * Copyright (C) 2006-2011, Pino Toscano <pino@kde.org>
  * Copyright (C) 2008 Carlos Garcia Campos <carlosgc@gnome.org>
@@ -15,6 +15,8 @@
  * Copyright (C) 2012, 2015 Adam Reichold <adamreichold@myopera.com>
  * Copyright (C) 2012, 2013 Thomas Freitag <Thomas.Freitag@alfa.de>
  * Copyright (C) 2015 William Bader <williambader@hotmail.com>
+ * Copyright (C) 2016 Arseniy Lartsev <arseniy@alumni.chalmers.se>
+ * Copyright (C) 2017 Adrian Johnson <ajohnson@redneon.com>
  *
  * This program is free software; you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
@@ -58,6 +60,7 @@
 #include "poppler-page-transition-private.h"
 #include "poppler-page-private.h"
 #include "poppler-link-extractor-private.h"
+#include "poppler-link-private.h"
 #include "poppler-annotation-private.h"
 #include "poppler-form.h"
 #include "poppler-media.h"
@@ -205,9 +208,17 @@ Link* PageData::convertLinkActionToLink(::LinkAction * a, DocumentData *parentDo
       if ( lrn->hasScreenAnnot() )
         reference = lrn->getScreenAnnot();
 
-      popplerLink = new LinkRendition( linkArea, lrn->getMedia()->copy(), lrn->getOperation(), UnicodeParsedString( lrn->getScript() ), reference );
+      popplerLink = new LinkRendition( linkArea, lrn->getMedia() ? lrn->getMedia()->copy() : NULL, lrn->getOperation(), UnicodeParsedString( lrn->getScript() ), reference );
     }
     break;
+
+    case actionOCGState:
+    {
+      ::LinkOCGState *plocg = (::LinkOCGState *)a;
+
+      LinkOCGStatePrivate *locgp = new LinkOCGStatePrivate( linkArea, plocg );
+      popplerLink = new LinkOCGState( locgp );
+    }
 
     case actionUnknown:
     break;
@@ -294,10 +305,10 @@ QImage Page::renderToImage(double xres, double yres, int x, int y, int w, int h,
     {
 #if defined(HAVE_SPLASH)
       SplashColor bgColor;
-      GBool overprint = gFalse;
-#if defined(SPLASH_CMYK)
-      overprint = m_page->parentDoc->m_hints & Document::OverprintPreview ? gTrue : gFalse;
-      if (overprint)
+      GBool overprintPreview = gFalse;
+#ifdef SPLASH_CMYK
+      overprintPreview = m_page->parentDoc->m_hints & Document::OverprintPreview ? gTrue : gFalse;
+      if (overprintPreview)
       {
         Guchar c, m, y, k;
 
@@ -326,59 +337,71 @@ QImage Page::renderToImage(double xres, double yres, int x, int y, int w, int h,
         bgColor[1] = m_page->parentDoc->paperColor.green();
         bgColor[2] = m_page->parentDoc->paperColor.red();
       }
+
+      SplashColorMode colorMode = splashModeXBGR8;
+#ifdef SPLASH_CMYK
+      if (overprintPreview) colorMode = splashModeDeviceN8;
+#endif
  
       SplashThinLineMode thinLineMode = splashThinLineDefault;
       if (m_page->parentDoc->m_hints & Document::ThinLineShape) thinLineMode = splashThinLineShape;
       if (m_page->parentDoc->m_hints & Document::ThinLineSolid) thinLineMode = splashThinLineSolid;
 
-      SplashOutputDev * splash_output = new SplashOutputDev(
-#if defined(SPLASH_CMYK)
-                      (overprint) ? splashModeDeviceN8 : splashModeXBGR8,
-#else
-                      splashModeXBGR8,
-#endif 
-                      4, gFalse, bgColor, gTrue, thinLineMode, overprint);
+      const bool ignorePaperColor = m_page->parentDoc->m_hints & Document::IgnorePaperColor;
 
-      splash_output->setFontAntialias(m_page->parentDoc->m_hints & Document::TextAntialiasing ? gTrue : gFalse);
-      splash_output->setVectorAntialias(m_page->parentDoc->m_hints & Document::Antialiasing ? gTrue : gFalse);
-      splash_output->setFreeTypeHinting(m_page->parentDoc->m_hints & Document::TextHinting ? gTrue : gFalse, 
+      SplashOutputDev splash_output(
+                  colorMode, 4,
+                  gFalse,
+                  ignorePaperColor ? NULL : bgColor,
+                  gTrue,
+                  thinLineMode,
+                  overprintPreview);
+
+      splash_output.setFontAntialias(m_page->parentDoc->m_hints & Document::TextAntialiasing ? gTrue : gFalse);
+      splash_output.setVectorAntialias(m_page->parentDoc->m_hints & Document::Antialiasing ? gTrue : gFalse);
+      splash_output.setFreeTypeHinting(m_page->parentDoc->m_hints & Document::TextHinting ? gTrue : gFalse,
                                         m_page->parentDoc->m_hints & Document::TextSlightHinting ? gTrue : gFalse);
 
-      splash_output->startDoc(m_page->parentDoc->doc);      
+      splash_output.startDoc(m_page->parentDoc->doc);
 
-      m_page->parentDoc->doc->displayPageSlice(splash_output, m_page->index + 1, xres, yres,
+      m_page->parentDoc->doc->displayPageSlice(&splash_output, m_page->index + 1, xres, yres,
                                                rotation, false, true, false, x, y, w, h,
                                                NULL, NULL, NULL, NULL, gTrue);
 
-      SplashBitmap *bitmap = splash_output->getBitmap();
-      int bw = bitmap->getWidth();
-      int bh = bitmap->getHeight();
+      SplashBitmap *bitmap = splash_output.getBitmap();
 
-      if (bitmap->convertToXBGR())
-      {
-        SplashColorPtr dataPtr = bitmap->getDataPtr();
+      const int bw = bitmap->getWidth();
+      const int bh = bitmap->getHeight();
+      const int brs = bitmap->getRowSize();
 
-        if (QSysInfo::BigEndian == QSysInfo::ByteOrder)
-        {
-            uchar c;
-            int count = bw * bh * 4;
-            for (int k = 0; k < count; k += 4)
-            {
-            c = dataPtr[k];
-            dataPtr[k] = dataPtr[k+3];
-            dataPtr[k+3] = c;
+      // If we use DeviceN8, convert to XBGR8.
+      // If requested, also transfer Splash's internal alpha channel.
+      const SplashBitmap::ConversionMode mode = ignorePaperColor
+              ? SplashBitmap::conversionAlphaPremultiplied
+              : SplashBitmap::conversionOpaque;
 
-            c = dataPtr[k+1];
-            dataPtr[k+1] = dataPtr[k+2];
-            dataPtr[k+2] = c;
-            }
-        }
+      const QImage::Format format = ignorePaperColor
+              ? QImage::Format_ARGB32_Premultiplied
+              : QImage::Format_RGB32;
 
-        // construct a qimage SHARING the raw bitmap data in memory
-        QImage tmpimg( dataPtr, bw, bh, QImage::Format_ARGB32 );
-        img = tmpimg.copy();
+      if (bitmap->convertToXBGR(mode)) {
+          SplashColorPtr data = bitmap->getDataPtr();
+
+          if (QSysInfo::ByteOrder == QSysInfo::BigEndian) {
+              // Convert byte order from RGBX to XBGR.
+              for (int i = 0; i < bh; ++i) {
+                  for (int j = 0; j < bw; ++j) {
+                      SplashColorPtr pixel = &data[i * brs + j];
+
+                      qSwap(pixel[0], pixel[3]);
+                      qSwap(pixel[1], pixel[2]);
+                  }
+              }
+          }
+
+          // Construct a Qt image sharing the raw bitmap data.
+          img = QImage(data, bw, bh, brs, format).copy();
       }
-      delete splash_output;
 #endif
       break;
     }
@@ -590,6 +613,7 @@ QList<TextBox*> Page::textList(Rotation rotate) const
   
   QHash<TextWord *, TextBox*> wordBoxMap;
   
+  output_list.reserve(word_list->getLength());
   for (int i = 0; i < word_list->getLength(); i++) {
     TextWord *word = word_list->get(i);
     GooString *gooWord = word->getText();
@@ -627,11 +651,10 @@ QList<TextBox*> Page::textList(Rotation rotate) const
 PageTransition *Page::transition() const
 {
   if (!m_page->transition) {
-    Object o;
     PageTransitionParams params;
-    params.dictObj = m_page->page->getTrans(&o);
-    if (params.dictObj->isDict()) m_page->transition = new PageTransition(params);
-    o.free();
+    Object o = m_page->page->getTrans();
+    params.dictObj = &o;
+    if (o.isDict()) m_page->transition = new PageTransition(params);
   }
   return m_page->transition;
 }
@@ -640,20 +663,15 @@ Link *Page::action( PageAction act ) const
 {
   if ( act == Page::Opening || act == Page::Closing )
   {
-    Object o;
-    m_page->page->getActions(&o);
+    Object o = m_page->page->getActions();
     if (!o.isDict())
     {
-      o.free();
       return 0;
     }
     Dict *dict = o.getDict();
-    Object o2;
     const char *key = act == Page::Opening ? "O" : "C";
-    dict->lookup((char*)key, &o2);
+    Object o2 = dict->lookup((char*)key);
     ::LinkAction *lact = ::LinkAction::parseAction(&o2, m_page->parentDoc->doc->getCatalog()->getBaseURI() );
-    o2.free();
-    o.free();
     Link *popplerLink = NULL;
     if (lact != NULL)
     {

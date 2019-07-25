@@ -16,14 +16,14 @@
 // under GPL version 2 or later
 //
 // Copyright (C) 2006 Kristian Høgsberg <krh@redhat.com>
-// Copyright (C) 2007-2008, 2010, 2015 Albert Astals Cid <aacid@kde.org>
+// Copyright (C) 2007-2008, 2010, 2015, 2017 Albert Astals Cid <aacid@kde.org>
 // Copyright (C) 2009 Till Kamppeter <till.kamppeter@gmail.com>
 // Copyright (C) 2009 Sanjoy Mahajan <sanjoy@mit.edu>
-// Copyright (C) 2009, 2011, 2012, 2014, 2015 William Bader <williambader@hotmail.com>
+// Copyright (C) 2009, 2011, 2012, 2014-2016 William Bader <williambader@hotmail.com>
 // Copyright (C) 2010 Hib Eris <hib@hiberis.nl>
 // Copyright (C) 2012 Thomas Freitag <Thomas.Freitag@alfa.de>
 // Copyright (C) 2013 Suzuki Toshiya <mpsuzuki@hiroshima-u.ac.jp>
-// Copyright (C) 2014 Adrian Johnson <ajohnson@redneon.com>
+// Copyright (C) 2014, 2017 Adrian Johnson <ajohnson@redneon.com>
 //
 // To see a description of the changes please see the Changelog file that
 // came with your tarball or type make ChangeLog if you are building from git
@@ -85,7 +85,7 @@ static GBool level3Sep = gFalse;
 static GBool origPageSizes = gFalse;
 static GBool doEPS = gFalse;
 static GBool doForm = gFalse;
-#if OPI_SUPPORT
+#ifdef OPI_SUPPORT
 static GBool doOPI = gFalse;
 #endif
 static int splashResolution = 0;
@@ -96,6 +96,7 @@ static GBool noEmbedCIDPSFonts = gFalse;
 static GBool noEmbedCIDTTFonts = gFalse;
 static GBool fontPassthrough = gFalse;
 static GBool optimizeColorSpace = gFalse;
+static GBool passLevel1CustomColor = gFalse;
 static char rasterAntialiasStr[16] = "";
 static GBool preload = gFalse;
 static char paperSize[15] = "";
@@ -111,7 +112,7 @@ static char userPassword[33] = "\001";
 static GBool quiet = gFalse;
 static GBool printVersion = gFalse;
 static GBool printHelp = gFalse;
-#if SPLASH_CMYK
+#ifdef SPLASH_CMYK
 static GBool overprint = gFalse;
 #endif
 
@@ -138,7 +139,7 @@ static const ArgDesc argDesc[] = {
    "generate Encapsulated PostScript (EPS)"},
   {"-form",       argFlag,     &doForm,         0,
    "generate a PostScript form"},
-#if OPI_SUPPORT
+#ifdef OPI_SUPPORT
   {"-opi",        argFlag,     &doOPI,          0,
    "generate OPI comments"},
 #endif
@@ -160,6 +161,8 @@ static const ArgDesc argDesc[] = {
    "enable anti-aliasing on rasterization: yes, no"},
   {"-optimizecolorspace",  argFlag,        &optimizeColorSpace,0,
    "convert gray RGB images to gray color space"},
+  {"-passlevel1customcolor", argFlag,      &passLevel1CustomColor, 0,
+   "pass custom color in level1sep"},
   {"-preload",    argFlag,     &preload,        0,
    "preload images and forms"},
   {"-paper",      argString,   paperSize,       sizeof(paperSize),
@@ -182,7 +185,7 @@ static const ArgDesc argDesc[] = {
    "owner password (for encrypted files)"},
   {"-upw",        argString,   userPassword,    sizeof(userPassword),
    "user password (for encrypted files)"},
-#if SPLASH_CMYK
+#ifdef SPLASH_CMYK
   {"-overprint",argFlag,   &overprint,      0,
    "enable overprint"},
 #endif
@@ -283,7 +286,7 @@ int main(int argc, char *argv[]) {
       goto err0;
     }
   }
-#if SPLASH_CMYK
+#ifdef SPLASH_CMYK
   if (overprint) {
     globalParams->setOverprintPreview(gTrue);
   }
@@ -293,9 +296,6 @@ int main(int argc, char *argv[]) {
   }
   if (noShrink) {
     globalParams->setPSShrinkLarger(gFalse);
-  }
-  if (noCenter) {
-    globalParams->setPSCenter(gFalse);
   }
   if (level1 || level1Sep || level2 || level2Sep || level3 || level3Sep) {
     globalParams->setPSLevel(level);
@@ -390,6 +390,9 @@ int main(int argc, char *argv[]) {
 			  paperHeight,
                           noCrop,
 			  duplex);
+  if (noCenter) {
+    psOut->setPSCenter(gFalse);
+  }
 
   if (rasterAntialiasStr[0]) {
     if (!GlobalParams::parseYesNo2(rasterAntialiasStr, &rasterAntialias)) {
@@ -407,7 +410,8 @@ int main(int argc, char *argv[]) {
   psOut->setFontPassthrough(fontPassthrough);
   psOut->setPreloadImagesForms(preload);
   psOut->setOptimizeColorSpace(optimizeColorSpace);
-#if OPI_SUPPORT
+  psOut->setPassLevel1CustomColor(passLevel1CustomColor);
+#ifdef OPI_SUPPORT
   psOut->setGenerateOPI(doOPI);
 #endif
   psOut->setUseBinary(psBinary);

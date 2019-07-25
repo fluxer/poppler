@@ -1,13 +1,16 @@
 /* poppler-document.cc: qt interface to poppler
  * Copyright (C) 2005, Net Integration Technologies, Inc.
  * Copyright (C) 2005, 2008, Brad Hards <bradh@frogmouth.net>
- * Copyright (C) 2005-2010, 2012, 2013, Albert Astals Cid <aacid@kde.org>
+ * Copyright (C) 2005-2010, 2012, 2013, 2015-2017, Albert Astals Cid <aacid@kde.org>
  * Copyright (C) 2006-2010, Pino Toscano <pino@kde.org>
  * Copyright (C) 2010, 2011 Hib Eris <hib@hiberis.nl>
  * Copyright (C) 2012 Koji Otani <sho@bbr.jp>
  * Copyright (C) 2012, 2013 Thomas Freitag <Thomas.Freitag@alfa.de>
  * Copyright (C) 2012 Fabio D'Urso <fabiodurso@hotmail.it>
  * Copyright (C) 2014 Adam Reichold <adamreichold@myopera.com>
+ * Copyright (C) 2015 William Bader <williambader@hotmail.com>
+ * Copyright (C) 2016 Jakub Alba <jakubalba@gmail.com>
+ * Copyright (C) 2017 Adrian Johnson <ajohnson@redneon.com>
  *
  * This program is free software; you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
@@ -40,7 +43,6 @@
 #include <QtCore/QDebug>
 #include <QtCore/QFile>
 #include <QtCore/QByteArray>
-#include <QtCore/QScopedPointer>
 
 #include "poppler-private.h"
 #include "poppler-page-private.h"
@@ -256,12 +258,10 @@ namespace Poppler {
 	QByteArray result;
 	if (fi.isEmbedded())
 	{
-		Object refObj, strObj;
 		XRef *xref = m_doc->doc->getXRef()->copy();
 
-		refObj.initRef(fi.m_data->embRef.num, fi.m_data->embRef.gen);
-		refObj.fetch(xref, &strObj);
-		refObj.free();
+		Object refObj(fi.m_data->embRef.num, fi.m_data->embRef.gen);
+		Object strObj = refObj.fetch(xref);
 		if (strObj.isStream())
 		{
 			int c;
@@ -272,99 +272,247 @@ namespace Poppler {
 			}
 			strObj.streamClose();
 		}
-		strObj.free();
 		delete xref;
 	}
 	return result;
     }
 
-    /* borrowed from kpdf */
     QString Document::info( const QString & type ) const
     {
-	// [Albert] Code adapted from pdfinfo.cc on xpdf
-	Object info;
-	if ( m_doc->locked )
+	if (m_doc->locked) {
 	    return QString();
-
-	QScopedPointer<XRef> xref(m_doc->doc->getXRef()->copy());
-	if (!xref)
-		return QString();
-	xref->getDocInfo(&info);
-	if ( !info.isDict() )
-	    return QString();
-
-	QString result;
-	Object obj;
-	GooString *s1;
-	Dict *infoDict = info.getDict();
-
-	if ( infoDict->lookup( type.toLatin1().data(), &obj )->isString() )
-	{
-	    s1 = obj.getString();
-	    result = UnicodeParsedString(s1);
-	    obj.free();
-	    info.free();
-	    return result;
 	}
-	obj.free();
-	info.free();
-	return QString();
+
+	QScopedPointer<GooString> goo(m_doc->doc->getDocInfoStringEntry(type.toLatin1().constData()));
+	return UnicodeParsedString(goo.data());
+    }
+
+    bool Document::setInfo( const QString & key, const QString & val )
+    {
+	if (m_doc->locked) {
+	    return false;
+	}
+
+	GooString *goo = QStringToUnicodeGooString(val);
+	m_doc->doc->setDocInfoStringEntry(key.toLatin1().constData(), goo);
+	return true;
+    }
+
+    QString Document::title() const
+    {
+	if (m_doc->locked) {
+	    return QString();
+	}
+
+	QScopedPointer<GooString> goo(m_doc->doc->getDocInfoTitle());
+	return UnicodeParsedString(goo.data());
+    }
+
+    bool Document::setTitle( const QString & val )
+    {
+	if (m_doc->locked) {
+	    return false;
+	}
+
+	m_doc->doc->setDocInfoTitle(QStringToUnicodeGooString(val));
+	return true;
+    }
+
+    QString Document::author() const
+    {
+	if (m_doc->locked) {
+	    return QString();
+	}
+
+	QScopedPointer<GooString> goo(m_doc->doc->getDocInfoAuthor());
+	return UnicodeParsedString(goo.data());
+    }
+
+    bool Document::setAuthor( const QString & val )
+    {
+	if (m_doc->locked) {
+	    return false;
+	}
+
+	m_doc->doc->setDocInfoAuthor(QStringToUnicodeGooString(val));
+	return true;
+    }
+
+    QString Document::subject() const
+    {
+	if (m_doc->locked) {
+	    return QString();
+	}
+
+	QScopedPointer<GooString> goo(m_doc->doc->getDocInfoSubject());
+	return UnicodeParsedString(goo.data());
+    }
+
+    bool Document::setSubject( const QString & val )
+    {
+	if (m_doc->locked) {
+	    return false;
+	}
+
+	m_doc->doc->setDocInfoSubject(QStringToUnicodeGooString(val));
+	return true;
+    }
+
+    QString Document::keywords() const
+    {
+	if (m_doc->locked) {
+	    return QString();
+	}
+
+	QScopedPointer<GooString> goo(m_doc->doc->getDocInfoKeywords());
+	return UnicodeParsedString(goo.data());
+    }
+
+    bool Document::setKeywords( const QString & val )
+    {
+	if (m_doc->locked) {
+	    return false;
+	}
+
+	m_doc->doc->setDocInfoKeywords(QStringToUnicodeGooString(val));
+	return true;
+    }
+
+    QString Document::creator() const
+    {
+	if (m_doc->locked) {
+	    return QString();
+	}
+
+	QScopedPointer<GooString> goo(m_doc->doc->getDocInfoCreator());
+	return UnicodeParsedString(goo.data());
+    }
+
+    bool Document::setCreator( const QString & val )
+    {
+	if (m_doc->locked) {
+	    return false;
+	}
+
+	m_doc->doc->setDocInfoCreator(QStringToUnicodeGooString(val));
+	return true;
+    }
+
+    QString Document::producer() const
+    {
+	if (m_doc->locked) {
+	    return QString();
+	}
+
+	QScopedPointer<GooString> goo(m_doc->doc->getDocInfoProducer());
+	return UnicodeParsedString(goo.data());
+    }
+
+    bool Document::setProducer( const QString & val )
+    {
+	if (m_doc->locked) {
+	    return false;
+	}
+
+	m_doc->doc->setDocInfoProducer(QStringToUnicodeGooString(val));
+	return true;
+    }
+
+    bool Document::removeInfo()
+    {
+	if (m_doc->locked) {
+	    return false;
+	}
+
+	m_doc->doc->removeDocInfo();
+	return true;
     }
 
     QStringList Document::infoKeys() const
     {
 	QStringList keys;
 
-	Object info;
 	if ( m_doc->locked )
 	    return QStringList();
 
 	QScopedPointer<XRef> xref(m_doc->doc->getXRef()->copy());
 	if (!xref)
 		return QStringList();
-	xref->getDocInfo(&info);
+	Object info = xref->getDocInfo();
 	if ( !info.isDict() )
 	    return QStringList();
 
 	Dict *infoDict = info.getDict();
 	// somehow iterate over keys in infoDict
+	keys.reserve( infoDict->getLength() );
 	for( int i=0; i < infoDict->getLength(); ++i ) {
 	    keys.append( QString::fromAscii(infoDict->getKey(i)) );
 	}
 
-	info.free();
 	return keys;
     }
 
-    /* borrowed from kpdf */
     QDateTime Document::date( const QString & type ) const
     {
-	// [Albert] Code adapted from pdfinfo.cc on xpdf
-	if ( m_doc->locked )
-	    return QDateTime();
-
-	Object info;
-	QScopedPointer<XRef> xref(m_doc->doc->getXRef()->copy());
-	if (!xref)
-		return QDateTime();
-	xref->getDocInfo(&info);
-	if ( !info.isDict() ) {
-	    info.free();
+	if (m_doc->locked) {
 	    return QDateTime();
 	}
 
-	Object obj;
-	Dict *infoDict = info.getDict();
-	QDateTime result;
+	QScopedPointer<GooString> goo(m_doc->doc->getDocInfoStringEntry(type.toLatin1().constData()));
+	QString str = UnicodeParsedString(goo.data());
+	return Poppler::convertDate(str.toLatin1().data());
+    }
 
-	if ( infoDict->lookup( type.toLatin1().data(), &obj )->isString() )
-	{
-	    char *aux = obj.getString()->getCString();
-	    result = Poppler::convertDate(aux);
+    bool Document::setDate( const QString & key, const QDateTime & val )
+    {
+	if (m_doc->locked) {
+	    return false;
 	}
-	obj.free();
-	info.free();
-	return result;
+
+	m_doc->doc->setDocInfoStringEntry(key.toLatin1().constData(), QDateTimeToUnicodeGooString(val));
+	return true;
+    }
+
+    QDateTime Document::creationDate() const
+    {
+	if (m_doc->locked) {
+	    return QDateTime();
+	}
+
+	QScopedPointer<GooString> goo(m_doc->doc->getDocInfoCreatDate());
+	QString str = UnicodeParsedString(goo.data());
+	return Poppler::convertDate(str.toLatin1().data());
+    }
+
+    bool Document::setCreationDate( const QDateTime & val )
+    {
+	if (m_doc->locked) {
+	    return false;
+	}
+
+	m_doc->doc->setDocInfoCreatDate(QDateTimeToUnicodeGooString(val));
+	return true;
+    }
+
+    QDateTime Document::modificationDate() const
+    {
+	if (m_doc->locked) {
+	    return QDateTime();
+	}
+
+	QScopedPointer<GooString> goo(m_doc->doc->getDocInfoModDate());
+	QString str = UnicodeParsedString(goo.data());
+	return Poppler::convertDate(str.toLatin1().data());
+    }
+
+    bool Document::setModificationDate( const QDateTime & val )
+    {
+	if (m_doc->locked) {
+	    return false;
+	}
+
+	m_doc->doc->setDocInfoModDate(QDateTimeToUnicodeGooString(val));
+	return true;
     }
 
     bool Document::isEncrypted() const
@@ -692,7 +840,7 @@ namespace Poppler {
     }
 
     bool isOverprintPreviewAvailable() {
-#if defined(SPLASH_CMYK)
+#ifdef SPLASH_CMYK
         return true;
 #else
         return false;

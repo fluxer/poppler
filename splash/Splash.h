@@ -13,9 +13,9 @@
 //
 // Copyright (C) 2005 Marco Pesenti Gritti <mpg@redhat.com>
 // Copyright (C) 2007, 2011 Albert Astals Cid <aacid@kde.org>
-// Copyright (C) 2010-2013 Thomas Freitag <Thomas.Freitag@alfa.de>
+// Copyright (C) 2010-2013, 2015 Thomas Freitag <Thomas.Freitag@alfa.de>
 // Copyright (C) 2010 Christian Feuersänger <cfeuersaenger@googlemail.com>
-// Copyright (C) 2012 Adrian Johnson <ajohnson@redneon.com>
+// Copyright (C) 2012, 2017 Adrian Johnson <ajohnson@redneon.com>
 //
 // To see a description of the changes please see the Changelog file that
 // came with your tarball or type make ChangeLog if you are building from git
@@ -56,10 +56,13 @@ typedef GBool (*SplashImageMaskSource)(void *data, SplashColorPtr pixel);
 typedef GBool (*SplashImageSource)(void *data, SplashColorPtr colorLine,
 				   Guchar *alphaLine);
 
+// Use ICCColorSpace to transform a bitmap
+typedef void (*SplashICCTransform)(void *data, SplashBitmap *bitmap);
+
 //------------------------------------------------------------------------
 
 enum SplashPipeResultColorCtrl {
-#if SPLASH_CMYK
+#ifdef SPLASH_CMYK
   splashPipeResultColorNoAlphaBlendCMYK,
   splashPipeResultColorNoAlphaBlendDeviceN,
 #endif
@@ -67,13 +70,13 @@ enum SplashPipeResultColorCtrl {
   splashPipeResultColorNoAlphaBlendMono,
   splashPipeResultColorAlphaNoBlendMono,
   splashPipeResultColorAlphaNoBlendRGB,
-#if SPLASH_CMYK
+#ifdef SPLASH_CMYK
   splashPipeResultColorAlphaNoBlendCMYK,
   splashPipeResultColorAlphaNoBlendDeviceN,
 #endif
   splashPipeResultColorAlphaBlendMono,
   splashPipeResultColorAlphaBlendRGB
-#if SPLASH_CMYK
+#ifdef SPLASH_CMYK
   ,
   splashPipeResultColorAlphaBlendCMYK,
   splashPipeResultColorAlphaBlendDeviceN
@@ -126,6 +129,8 @@ public:
   void setBlendFunc(SplashBlendFunc func);
   void setStrokeAlpha(SplashCoord alpha);
   void setFillAlpha(SplashCoord alpha);
+  void setPatternAlpha(SplashCoord strokeAlpha, SplashCoord fillAlpha);
+  void clearPatternAlpha();
   void setFillOverprint(GBool fop);
   void setStrokeOverprint(GBool sop);
   void setOverprintMode(int opm);
@@ -211,7 +216,7 @@ public:
   //    BGR8         BGR8
   //    CMYK8        CMYK8
   // The matrix behaves as for fillImageMask.
-  SplashError drawImage(SplashImageSource src, void *srcData,
+  SplashError drawImage(SplashImageSource src, SplashICCTransform tf, void *srcData,
 			SplashColorMode srcMode, GBool srcAlpha,
 			int w, int h, SplashCoord *mat, GBool interpolate,
 			GBool tilingPattern = gFalse);
@@ -293,7 +298,7 @@ private:
   void pipeRunSimpleRGB8(SplashPipe *pipe);
   void pipeRunSimpleXBGR8(SplashPipe *pipe);
   void pipeRunSimpleBGR8(SplashPipe *pipe);
-#if SPLASH_CMYK
+#ifdef SPLASH_CMYK
   void pipeRunSimpleCMYK8(SplashPipe *pipe);
   void pipeRunSimpleDeviceN8(SplashPipe *pipe);
 #endif
@@ -302,7 +307,7 @@ private:
   void pipeRunAARGB8(SplashPipe *pipe);
   void pipeRunAAXBGR8(SplashPipe *pipe);
   void pipeRunAABGR8(SplashPipe *pipe);
-#if SPLASH_CMYK
+#ifdef SPLASH_CMYK
   void pipeRunAACMYK8(SplashPipe *pipe);
   void pipeRunAADeviceN8(SplashPipe *pipe);
 #endif
@@ -357,7 +362,7 @@ private:
 		     SplashBitmap *dest);
   void blitMask(SplashBitmap *src, int xDest, int yDest,
 		SplashClipResult clipRes);
-  SplashError arbitraryTransformImage(SplashImageSource src, void *srcData,
+  SplashError arbitraryTransformImage(SplashImageSource src, SplashICCTransform tf, void *srcData,
 			       SplashColorMode srcMode, int nComps,
 			       GBool srcAlpha,
 			       int srcWidth, int srcHeight,

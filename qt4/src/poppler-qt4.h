@@ -1,7 +1,7 @@
 /* poppler-qt.h: qt interface to poppler
  * Copyright (C) 2005, Net Integration Technologies, Inc.
  * Copyright (C) 2005, 2007, Brad Hards <bradh@frogmouth.net>
- * Copyright (C) 2005-2012, 2014, Albert Astals Cid <aacid@kde.org>
+ * Copyright (C) 2005-2012, 2014, 2015, Albert Astals Cid <aacid@kde.org>
  * Copyright (C) 2005, Stefan Kebekus <stefan.kebekus@math.uni-koeln.de>
  * Copyright (C) 2006-2011, Pino Toscano <pino@kde.org>
  * Copyright (C) 2009 Shawn Rutledge <shawn.t.rutledge@gmail.com>
@@ -14,6 +14,7 @@
  * Copyright (C) 2012, Tobias Koenig <tobias.koenig@kdab.com>
  * Copyright (C) 2012, 2014, 2015 Adam Reichold <adamreichold@myopera.com>
  * Copyright (C) 2012, 2013 Thomas Freitag <Thomas.Freitag@alfa.de>
+ * Copyright (C) 2016 Jakub Alba <jakubalba@gmail.com>
  *
  * This program is free software; you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
@@ -41,8 +42,8 @@
 #include <QtCore/QByteArray>
 #include <QtCore/QDateTime>
 #include <QtCore/QSet>
-#include <QtXml/qdom.h>
 #include <QtGui/QPainter>
+#include <QtXml/QDomDocument>
 #include "poppler-export.h"
 
 class EmbFile;
@@ -902,7 +903,8 @@ delete it;
 	    TextSlightHinting = 0x00000008, ///< Lighter hinting for text when combined with TextHinting \since 0.18
 	    OverprintPreview = 0x00000010,  ///< Overprint preview \since 0.22
 	    ThinLineSolid = 0x00000020,     ///< Enhance thin lines solid \since 0.24
-	    ThinLineShape = 0x00000040      ///< Enhance thin lines shape. Wins over ThinLineSolid \since 0.24
+	    ThinLineShape = 0x00000040,     ///< Enhance thin lines shape. Wins over ThinLineSolid \since 0.24
+	    IgnorePaperColor = 0x00000080   ///< Do not compose with the paper color \since 0.35
 	};
 	Q_DECLARE_FLAGS( RenderHints, RenderHint )
 
@@ -1082,6 +1084,37 @@ QDateTime modified = m_doc->date("ModDate");
 	QDateTime date( const QString & data ) const;
 
 	/**
+	   Set the Info dict date entry specified by \param key to \param val
+
+	   \returns true on success, false on failure
+	*/
+	bool setDate( const QString & key, const QDateTime & val );
+
+	/**
+	   The date of the creation of the document
+	*/
+	QDateTime creationDate() const;
+
+	/**
+	   Set the creation date of the document to \param val
+
+	   \returns true on success, false on failure
+	*/
+	bool setCreationDate( const QDateTime & val );
+
+	/**
+	   The date of the last change in the document
+	*/
+	QDateTime modificationDate() const;
+
+	/**
+	   Set the modification date of the document to \param val
+
+	   \returns true on success, false on failure
+	*/
+	bool setModificationDate( const QDateTime & val );
+
+	/**
 	   Get specified information associated with the document
 
 	   You would use this method with something like:
@@ -1098,6 +1131,92 @@ QString subject = m_doc->info("Subject");
 	   \sa infoKeys() to get a list of the available keys
 	*/
 	QString info( const QString & data ) const;
+
+	/**
+	   Set the value of the document's Info dictionary entry specified by \param key to \param val
+
+	   \returns true on success, false on failure
+	*/
+	bool setInfo( const QString & key, const QString & val );
+
+	/**
+	   The title of the document
+	*/
+	QString title() const;
+
+	/**
+	   Set the title of the document to \param val
+
+	   \returns true on success, false on failure
+	*/
+	bool setTitle( const QString & val );
+
+	/**
+	   The author of the document
+	*/
+	QString author() const;
+
+	/**
+	   Set the author of the document to \param val
+
+	   \returns true on success, false on failure
+	*/
+	bool setAuthor( const QString & val );
+
+	/**
+	   The subject of the document
+	*/
+	QString subject() const;
+
+	/**
+	   Set the subject of the document to \param val
+
+	   \returns true on success, false on failure
+	*/
+	bool setSubject( const QString & val );
+
+	/**
+	   The keywords of the document
+	*/
+	QString keywords() const;
+
+	/**
+	   Set the keywords of the document to \param val
+
+	   \returns true on success, false on failure
+	*/
+	bool setKeywords( const QString & val );
+
+	/**
+	   The creator of the document
+	*/
+	QString creator() const;
+
+	/**
+	   Set the creator of the document to \param val
+
+	   \returns true on success, false on failure
+	*/
+	bool setCreator( const QString & val );
+
+	/**
+	   The producer of the document
+	*/
+	QString producer() const;
+
+	/**
+	   Set the producer of the document to \param val
+
+	   \returns true on success, false on failure
+	*/
+	bool setProducer( const QString & val );
+
+	/**
+	   Remove the document's Info dictionary
+
+	   \returns true on success, false on failure
+	*/
+	bool removeInfo();
 
 	/**
 	   Obtain a list of the available string information keys.

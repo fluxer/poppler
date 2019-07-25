@@ -2,10 +2,7 @@
 #include <QtGui/QApplication>
 #include <QtGui/QImage>
 #include <QtGui/QPainter>
-#include <QtCore/QEvent>
-#ifndef QT_KATIE
-#include <QtGui/QKeyEvent>
-#endif
+#include <QtGui/QPaintEvent>
 #include <QtGui/QWidget>
 
 #include <poppler-qt4.h>

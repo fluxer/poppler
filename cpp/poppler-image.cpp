@@ -1,6 +1,8 @@
 /*
  * Copyright (C) 2010-2011, Pino Toscano <pino@kde.org>
  * Copyright (C) 2013 Adrian Johnson <ajohnson@redneon.com>
+ * Copyright (C) 2017, Albert Astals Cid <aacid@kde.org>
+ * Copyright (C) 2017, Jeroen Ooms <jeroenooms@gmail.com>
  *
  * This program is free software; you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
@@ -115,7 +117,7 @@ image_private *image_private::create_data(int width, int height, image::format_e
         return 0;
     }
 
-    std::auto_ptr<image_private> d(new image_private(width, height, format));
+    std::unique_ptr<image_private> d(new image_private(width, height, format));
     d->bytes_num = bpr * height;
     d->data = reinterpret_cast<char *>(std::malloc(d->bytes_num));
     if (!d->data) {
@@ -138,13 +140,13 @@ image_private *image_private::create_data(char *data, int width, int height, ima
         return 0;
     }
 
-    std::auto_ptr<image_private> d(new image_private(width, height, format));
+    image_private *d = new image_private(width, height, format);
     d->bytes_num = bpr * height;
     d->data = data;
     d->own_data = false;
     d->bytes_per_row = bpr;
 
-    return d.release();
+    return d;
 }
 
 /**
@@ -345,7 +347,7 @@ bool image::save(const std::string &file_name, const std::string &out_format, in
     std::string fmt = out_format;
     std::transform(fmt.begin(), fmt.end(), fmt.begin(), tolower);
 
-    std::auto_ptr<ImgWriter> w;
+    std::unique_ptr<ImgWriter> w;
     const int actual_dpi = dpi == -1 ? 75 : dpi;
     if (false) {
     }
@@ -370,7 +372,7 @@ bool image::save(const std::string &file_name, const std::string &out_format, in
     if (!w.get()) {
         return false;
     }
-    FILE *f = fopen(file_name.c_str(), "w");
+    FILE *f = fopen(file_name.c_str(), "wb");
     if (!f) {
         return false;
     }

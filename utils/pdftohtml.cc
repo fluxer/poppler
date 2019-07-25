@@ -13,7 +13,7 @@
 // All changes made under the Poppler project to this file are licensed
 // under GPL version 2 or later
 //
-// Copyright (C) 2007-2008, 2010, 2012, 2015 Albert Astals Cid <aacid@kde.org>
+// Copyright (C) 2007-2008, 2010, 2012, 2015-2017 Albert Astals Cid <aacid@kde.org>
 // Copyright (C) 2010 Hib Eris <hib@hiberis.nl>
 // Copyright (C) 2010 Mike Slegeir <tehpola@yahoo.com>
 // Copyright (C) 2010, 2013 Suzuki Toshiya <mpsuzuki@hiroshima-u.ac.jp>
@@ -58,7 +58,6 @@
 #include "SplashOutputDev.h"
 #include "splash/SplashBitmap.h"
 #endif
-#include "PSOutputDev.h"
 #include "GlobalParams.h"
 #include "PDFDocEncoding.h"
 #include "Error.h"
@@ -163,14 +162,14 @@ public:
   void drawChar(GfxState *state, double x, double y,
       double dx, double dy,
       double originX, double originY,
-      CharCode code, int nBytes, Unicode *u, int uLen) { }
+      CharCode code, int nBytes, Unicode *u, int uLen) override { }
   GBool beginType3Char(GfxState *state, double x, double y,
       double dx, double dy,
-      CharCode code, Unicode *u, int uLen) { return false; }
-  void endType3Char(GfxState *state) { }
-  void beginTextObject(GfxState *state) { }
-  void endTextObject(GfxState *state) { }
-  GBool interpretType3Chars() { return gFalse; }
+      CharCode code, Unicode *u, int uLen) override { return false; }
+  void endType3Char(GfxState *state) override { }
+  void beginTextObject(GfxState *state) override { }
+  void endTextObject(GfxState *state) override { }
+  GBool interpretType3Chars() override { return gFalse; }
 };
 #endif
 
@@ -189,6 +188,7 @@ int main(int argc, char *argv[]) {
   char *p;
   GooString *ownerPW, *userPW;
   Object info;
+  int exit_status = EXIT_FAILURE;
 
   // parse args
   ok = parseArgs(argDesc, &argc, argv);
@@ -333,7 +333,7 @@ int main(int argc, char *argv[]) {
     goto error;
   }
 
-  doc->getDocInfo(&info);
+  info = doc->getDocInfo();
   if (info.isDict()) {
     docTitle = getInfoString(info.getDict(), "Title");
     author = getInfoString(info.getDict(), "Author");
@@ -343,7 +343,6 @@ int main(int argc, char *argv[]) {
     if( !date )
 	date = getInfoDate(info.getDict(), "CreationDate");
   }
-  info.free();
   if( !docTitle ) docTitle = new GooString(htmlFileName);
 
   if (!singleHtml)
@@ -434,6 +433,8 @@ int main(int argc, char *argv[]) {
   
   delete htmlOut;
 
+  exit_status = EXIT_SUCCESS;
+
   // clean up
  error:
   if(doc) delete doc;
@@ -447,7 +448,7 @@ int main(int argc, char *argv[]) {
   Object::memCheck(stderr);
   gMemReport(stderr);
 
-  return 0;
+  return exit_status;
 }
 
 static GooString* getInfoString(Dict *infoDict, const char *key) {
@@ -462,7 +463,8 @@ static GooString* getInfoString(Dict *infoDict, const char *key) {
   // Is rawString UCS2 (as opposed to pdfDocEncoding)
   GBool isUnicode;
 
-  if (infoDict->lookup(key, &obj)->isString()) {
+  obj = infoDict->lookup(key);
+  if (obj.isString()) {
     rawString = obj.getString();
 
     // Convert rawString to unicode
@@ -489,7 +491,6 @@ static GooString* getInfoString(Dict *infoDict, const char *key) {
     delete[] unicodeString;
   }
 
-  obj.free();
   return encodedString;
 }
 
@@ -502,7 +503,8 @@ static GooString* getInfoDate(Dict *infoDict, const char *key) {
   GooString *result = NULL;
   char buf[256];
 
-  if (infoDict->lookup(key, &obj)->isString()) {
+  obj = infoDict->lookup(key);
+  if (obj.isString()) {
     s = obj.getString()->getCString();
     // TODO do something with the timezone info
     if ( parseDateString( s, &year, &mon, &day, &hour, &min, &sec, &tz, &tz_hour, &tz_minute ) ) {
@@ -525,7 +527,6 @@ static GooString* getInfoDate(Dict *infoDict, const char *key) {
       result = new GooString(s);
     }
   }
-  obj.free();
   return result;
 }
 

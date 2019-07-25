@@ -1,9 +1,10 @@
 /* poppler-private.cc: qt interface to poppler
  * Copyright (C) 2005, Net Integration Technologies, Inc.
- * Copyright (C) 2006, 2011 by Albert Astals Cid <aacid@kde.org>
+ * Copyright (C) 2006, 2011, 2015, 2017 by Albert Astals Cid <aacid@kde.org>
  * Copyright (C) 2008, 2010, 2011 by Pino Toscano <pino@kde.org>
  * Copyright (C) 2013 by Thomas Freitag <Thomas.Freitag@alfa.de>
  * Copyright (C) 2013 Adrian Johnson <ajohnson@redneon.com>
+ * Copyright (C) 2016 Jakub Alba <jakubalba@gmail.com>
  * Inspired on code by
  * Copyright (C) 2004 by Albert Astals Cid <tsdgeos@terra.es>
  * Copyright (C) 2004 by Enrico Ros <eros.kde@email.it>
@@ -31,13 +32,14 @@
 
 #include <Link.h>
 #include <Outline.h>
+#include <PDFDocEncoding.h>
 #include <UnicodeMap.h>
 
 namespace Poppler {
 
 namespace Debug {
 
-    void qDebugDebugFunction(const QString &message, const QVariant & /*closure*/)
+    static void qDebugDebugFunction(const QString &message, const QVariant & /*closure*/)
     {
         qDebug() << message;
     }
@@ -55,7 +57,7 @@ namespace Debug {
         Debug::debugClosure = closure;
     }
 
-    void qt4ErrorFunction(void * /*data*/, ErrorCategory /*category*/, Goffset pos, char *msg)
+    static void qt4ErrorFunction(void * /*data*/, ErrorCategory /*category*/, Goffset pos, char *msg)
     {
         QString emsg;
 
@@ -100,44 +102,38 @@ namespace Debug {
         if ( !s1 || s1->getLength() == 0 )
             return QString();
 
-        GBool isUnicode;
-        int i;
-        Unicode u;
-        QString result;
+        char *cString;
+        int stringLength;
+        bool deleteCString;
         if ( ( s1->getChar(0) & 0xff ) == 0xfe && ( s1->getLength() > 1 && ( s1->getChar(1) & 0xff ) == 0xff ) )
         {
-            isUnicode = gTrue;
-            i = 2;
-            result.reserve( ( s1->getLength() - 2 ) / 2 );
+            cString = s1->getCString();
+            stringLength = s1->getLength();
+            deleteCString = false;
         }
         else
         {
-            isUnicode = gFalse;
-            i = 0;
-            result.reserve( s1->getLength() );
+            cString = pdfDocEncodingToUTF16(s1, &stringLength);
+            deleteCString = true;
         }
-        while ( i < s1->getLength() )
+
+        QString result;
+        // i = 2 to skip the unicode marker
+        for ( int i = 2; i < stringLength; i += 2 )
         {
-            if ( isUnicode )
-            {
-                u = ( ( s1->getChar(i) & 0xff ) << 8 ) | ( s1->getChar(i+1) & 0xff );
-                i += 2;
-            }
-            else
-            {
-                u = s1->getChar(i) & 0xff;
-                ++i;
-            }
+            const Unicode u = ( ( cString[i] & 0xff ) << 8 ) | ( cString[i+1] & 0xff );
             result += QChar( u );
         }
+        if (deleteCString)
+            delete[] cString;
         return result;
     }
 
     GooString *QStringToUnicodeGooString(const QString &s) {
         int len = s.length() * 2 + 2;
         char *cstring = (char *)gmallocn(len, sizeof(char));
-        cstring[0] = 0xfe;
-        cstring[1] = 0xff;
+        cstring[0] = (char)0xfe;
+        cstring[1] = (char)0xff;
         for (int i = 0; i < s.length(); ++i)
         {
             cstring[2+i*2] = s.at(i).row();
@@ -158,7 +154,15 @@ namespace Debug {
         return ret;
     }
 
-    void linkActionToTocItem( ::LinkAction * a, DocumentData * doc, QDomElement * e )
+    GooString *QDateTimeToUnicodeGooString(const QDateTime &dt) {
+        if (!dt.isValid()) {
+            return NULL;
+        }
+
+        return QStringToUnicodeGooString(dt.toUTC().toString("yyyyMMddhhmmss+00'00'"));
+    }
+
+    static void linkActionToTocItem( ::LinkAction * a, DocumentData * doc, QDomElement * e )
     {
         if ( !a || !e )
             return;

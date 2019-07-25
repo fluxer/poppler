@@ -13,12 +13,12 @@ private slots:
     void checkDests_xr02();
 };
 
-bool isDestinationValid_pageNumber( const Poppler::LinkDestination *dest, const Poppler::Document *doc )
+static bool isDestinationValid_pageNumber( const Poppler::LinkDestination *dest, const Poppler::Document *doc )
 {
     return dest->pageNumber() > 0 && dest->pageNumber() <= doc->numPages();
 }
 
-bool isDestinationValid_name( const Poppler::LinkDestination *dest )
+static bool isDestinationValid_name( const Poppler::LinkDestination *dest )
 {
     return !dest->destinationName().isEmpty();
 }
@@ -30,7 +30,7 @@ void TestLinks::checkDocumentWithNoDests()
     doc = Poppler::Document::load(TESTDATADIR "/unittestcases/WithAttachments.pdf");
     QVERIFY( doc );
 
-    std::auto_ptr< Poppler::LinkDestination > dest;
+    std::unique_ptr< Poppler::LinkDestination > dest;
     dest.reset( doc->linkDestination("no.dests.in.this.document") );
     QVERIFY( !isDestinationValid_pageNumber( dest.get(), doc ) );
     QVERIFY( isDestinationValid_name( dest.get() ) );
@@ -68,6 +68,8 @@ void TestLinks::checkDests_xr01()
     QCOMPARE( dest.destinationName(), QString::fromLatin1("section.2") );
     }
 
+    qDeleteAll(links);
+    delete page;
     delete doc;
 }
 
@@ -77,7 +79,7 @@ void TestLinks::checkDests_xr02()
     doc = Poppler::Document::load(TESTDATADIR "/unittestcases/xr02.pdf");
     QVERIFY( doc );
 
-    std::auto_ptr< Poppler::LinkDestination > dest;
+    std::unique_ptr< Poppler::LinkDestination > dest;
     dest.reset( doc->linkDestination("section.1") );
     QVERIFY( isDestinationValid_pageNumber( dest.get(), doc ) );
     QVERIFY( !isDestinationValid_name( dest.get() ) );

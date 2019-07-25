@@ -3,6 +3,7 @@
 // pdfinfo.cc
 //
 // Copyright 1998-2003 Glyph & Cog, LLC
+// Copyright 2013 Igalia S.L.
 //
 //========================================================================
 
@@ -14,10 +15,10 @@
 // under GPL version 2 or later
 //
 // Copyright (C) 2006 Dom Lachowicz <cinamod@hotmail.com>
-// Copyright (C) 2007-2010, 2012 Albert Astals Cid <aacid@kde.org>
+// Copyright (C) 2007-2010, 2012, 2016, 2017 Albert Astals Cid <aacid@kde.org>
 // Copyright (C) 2010 Hib Eris <hib@hiberis.nl>
 // Copyright (C) 2011 Vittal Aithal <vittal.aithal@cognidox.com>
-// Copyright (C) 2012, 2013 Adrian Johnson <ajohnson@redneon.com>
+// Copyright (C) 2012, 2013, 2016, 2017 Adrian Johnson <ajohnson@redneon.com>
 // Copyright (C) 2012 Fabio D'Urso <fabiodurso@hotmail.it>
 // Copyright (C) 2013 Adrian Perez de Castro <aperez@igalia.com>
 // Copyright (C) 2013 Suzuki Toshiya <mpsuzuki@hiroshima-u.ac.jp>
@@ -35,10 +36,12 @@
 #include <string.h>
 #include <time.h>
 #include <math.h>
+#include <map>
 #include "parseargs.h"
 #include "printencodings.h"
 #include "goo/GooString.h"
 #include "goo/gfile.h"
+#include "goo/glibc.h"
 #include "goo/gmem.h"
 #include "GlobalParams.h"
 #include "Object.h"
@@ -56,17 +59,16 @@
 #include "Error.h"
 #include "DateInfo.h"
 #include "JSInfo.h"
+#include "StructTreeRoot.h"
+#include "StructElement.h"
 
-static void printInfoString(Dict *infoDict, const char *key, const char *text,
-			    UnicodeMap *uMap);
-static void printInfoDate(Dict *infoDict, const char *key, const char *text);
-static void printBox(const char *text, PDFRectangle *box);
 
 static int firstPage = 1;
 static int lastPage = 0;
 static GBool printBoxes = gFalse;
 static GBool printMetadata = gFalse;
 static GBool printJS = gFalse;
+static GBool isoDates = gFalse;
 static GBool rawDates = gFalse;
 static char textEncName[128] = "";
 static char ownerPassword[33] = "\001";
@@ -74,6 +76,9 @@ static char userPassword[33] = "\001";
 static GBool printVersion = gFalse;
 static GBool printHelp = gFalse;
 static GBool printEnc = gFalse;
+static GBool printStructure = gFalse;
+static GBool printStructureText = gFalse;
+static GBool printDests = gFalse;
 
 static const ArgDesc argDesc[] = {
   {"-f",      argInt,      &firstPage,        0,
@@ -86,8 +91,16 @@ static const ArgDesc argDesc[] = {
    "print the document metadata (XML)"},
   {"-js",     argFlag,     &printJS,          0,
    "print all JavaScript in the PDF"},
+  {"-struct", argFlag,     &printStructure,   0,
+   "print the logical document structure (for tagged files)"},
+  {"-struct-text", argFlag, &printStructureText, 0,
+   "print text contents along with document structure (for tagged files)"},
+  {"-isodates", argFlag,   &isoDates,         0,
+   "print the dates in ISO-8601 format"},
   {"-rawdates", argFlag,   &rawDates,         0,
    "print the undecoded date strings directly from the PDF file"},
+  {"-dests",     argFlag,  &printDests,       0,
+   "print all named destinations in the PDF"},
   {"-enc",    argString,   textEncName,    sizeof(textEncName),
    "output text encoding name"},
   {"-listenc",argFlag,     &printEnc,      0,
@@ -109,22 +122,496 @@ static const ArgDesc argDesc[] = {
   {NULL}
 };
 
+static void printInfoString(Dict *infoDict, const char *key, const char *text,
+			    UnicodeMap *uMap) {
+  GooString *s1;
+  Unicode *u;
+  char buf[8];
+  int i, n, len;
+
+  Object obj = infoDict->lookup(key);
+  if (obj.isString()) {
+    fputs(text, stdout);
+    s1 = obj.getString();
+    len = TextStringToUCS4(s1, &u);
+    for (i = 0; i < len; i++) {
+      n = uMap->mapUnicode(u[i], buf, sizeof(buf));
+      fwrite(buf, 1, n, stdout);
+    }
+    gfree(u);
+    fputc('\n', stdout);
+  }
+}
+
+static void printInfoDate(Dict *infoDict, const char *key, const char *text) {
+  char *s;
+  int year, mon, day, hour, min, sec, tz_hour, tz_minute;
+  char tz;
+  struct tm tmStruct;
+  time_t time;
+  char buf[256];
+
+  Object obj = infoDict->lookup(key);
+  if (obj.isString()) {
+    fputs(text, stdout);
+    s = obj.getString()->getCString();
+    // TODO do something with the timezone info
+    if ( parseDateString( s, &year, &mon, &day, &hour, &min, &sec, &tz, &tz_hour, &tz_minute ) ) {
+      tmStruct.tm_year = year - 1900;
+      tmStruct.tm_mon = mon - 1;
+      tmStruct.tm_mday = day;
+      tmStruct.tm_hour = hour;
+      tmStruct.tm_min = min;
+      tmStruct.tm_sec = sec;
+      tmStruct.tm_wday = -1;
+      tmStruct.tm_yday = -1;
+      tmStruct.tm_isdst = -1;
+      // compute the tm_wday and tm_yday fields
+      time = timegm(&tmStruct);
+      if (time != (time_t)-1) {
+	int offset = (tz_hour*60 + tz_minute)*60;
+	if (tz == '-')
+	  offset *= -1;
+	time -= offset;
+	localtime_r(&time, &tmStruct);
+	strftime(buf, sizeof(buf), "%c %Z", &tmStruct);
+	fputs(buf, stdout);
+      } else {
+	fputs(s, stdout);
+      }
+    } else {
+      fputs(s, stdout);
+    }
+    fputc('\n', stdout);
+  }
+}
+
+static void printISODate(Dict *infoDict, const char *key, const char *text)
+{
+  char *s;
+  int year, mon, day, hour, min, sec, tz_hour, tz_minute;
+  char tz;
+
+  Object obj = infoDict->lookup(key);
+  if (obj.isString()) {
+    fputs(text, stdout);
+    s = obj.getString()->getCString();
+    if ( parseDateString( s, &year, &mon, &day, &hour, &min, &sec, &tz, &tz_hour, &tz_minute ) ) {
+      fprintf(stdout, "%04d-%02d-%02dT%02d:%02d:%02d", year, mon, day, hour, min, sec);
+      if (tz_hour == 0 && tz_minute == 0) {
+	fprintf(stdout, "Z");
+      } else {
+	fprintf(stdout, "%c%02d", tz, tz_hour);
+	if (tz_minute)
+	  fprintf(stdout, ":%02d", tz_minute);
+      }
+    } else {
+      fputs(s, stdout);
+    }
+    fputc('\n', stdout);
+  }
+}
+
+static void printBox(const char *text, PDFRectangle *box) {
+  printf("%s%8.2f %8.2f %8.2f %8.2f\n",
+	 text, box->x1, box->y1, box->x2, box->y2);
+}
+
+static void printIndent(unsigned indent) {
+  while (indent--) {
+    putchar(' ');
+    putchar(' ');
+  }
+}
+
+static void printAttribute(const Attribute *attribute, unsigned indent)
+{
+  printIndent(indent);
+  printf(" /%s ", attribute->getTypeName());
+  if (attribute->getType() == Attribute::UserProperty) {
+    GooString *name = attribute->getName();
+    printf("(%s) ", name->getCString());
+    delete name;
+  }
+  attribute->getValue()->print(stdout);
+  if (attribute->getFormattedValue()) {
+    printf(" \"%s\"", attribute->getFormattedValue());
+  }
+  if (attribute->isHidden()) {
+    printf(" [hidden]");
+  }
+}
+
+static void printStruct(const StructElement *element, unsigned indent) {
+  if (element->isObjectRef()) {
+    printIndent(indent);
+    printf("Object %i %i\n", element->getObjectRef().num, element->getObjectRef().gen);
+    return;
+  }
+
+  if (printStructureText && element->isContent()) {
+    GooString *text = element->getText(gFalse);
+    printIndent(indent);
+    if (text) {
+      printf("\"%s\"\n", text->getCString());
+    } else {
+      printf("(No content?)\n");
+    }
+    delete text;
+  }
+
+  if (!element->isContent()) {
+      printIndent(indent);
+      printf("%s", element->getTypeName());
+      if (element->getID()) {
+          printf(" <%s>", element->getID()->getCString());
+      }
+      if (element->getTitle()) {
+          printf(" \"%s\"", element->getTitle()->getCString());
+      }
+      if (element->getRevision() > 0) {
+          printf(" r%u", element->getRevision());
+      }
+      if (element->isInline() || element->isBlock()) {
+          printf(" (%s)", element->isInline() ? "inline" : "block");
+      }
+      if (element->getNumAttributes()) {
+          putchar(':');
+          for (unsigned i = 0; i < element->getNumAttributes(); i++) {
+              putchar('\n');
+              printAttribute(element->getAttribute(i), indent + 1);
+          }
+      }
+
+      putchar('\n');
+      for (unsigned i = 0; i < element->getNumChildren(); i++) {
+          printStruct(element->getChild(i), indent + 1);
+      }
+  }
+}
+
+struct RefCompare {
+  bool operator() (const Ref& lhs, const Ref& rhs) const {
+    return lhs.num < rhs.num;
+  }
+};
+
+struct GooStringCompare {
+  bool operator() (GooString* lhs, GooString* rhs) const {
+    return lhs->cmp(const_cast<GooString*>(rhs)) < 0;
+  }
+};
+
+static void printLinkDest(LinkDest *dest) {
+  GooString s;
+
+  switch (dest->getKind()) {
+    case destXYZ:
+      s.append("[ XYZ ");
+      if (dest->getChangeLeft()) {
+	s.appendf("{0:4.0g} ", dest->getLeft());
+      } else {
+	s.append("null ");
+      }
+      if (dest->getChangeTop()) {
+	s.appendf("{0:4.0g} ", dest->getTop());
+      } else {
+	s.append("null ");
+      }
+      if (dest->getChangeZoom()) {
+	s.appendf("{0:4.2f} ", dest->getZoom());
+      } else {
+	s.append("null ");
+      }
+      break;
+    case destFit:
+      s.append("[ Fit ");
+      break;
+    case destFitH:
+      if (dest->getChangeTop()) {
+	s.appendf("[ FitH {0:4.0g} ", dest->getTop());
+      } else {
+	s.append("[ FitH null ");
+      }
+      break;
+    case destFitV:
+      if (dest->getChangeLeft()) {
+	s.appendf("[ FitV {0:4.0g} ", dest->getLeft());
+      } else {
+	s.append("[ FitV null ");
+      }
+      break;
+    case destFitR:
+      s.appendf("[ FitR {0:4.0g} {1:4.0g} {2:4.0g} {3:4.0g} ",
+	      dest->getLeft(),
+	      dest->getBottom(),
+	      dest->getRight(),
+	      dest->getTop());
+      break;
+    case destFitB:
+      s.append("[ FitB ");
+      break;
+    case destFitBH:
+      if (dest->getChangeTop()) {
+	s.appendf("[ FitBH {0:4.0g} ", dest->getTop());
+      } else {
+	s.append("[ FitBH null ");
+      }
+      break;
+    case destFitBV:
+      if (dest->getChangeLeft()) {
+	s.appendf("[ FitBV {0:4.0g} ", dest->getLeft());
+      } else {
+	s.append("[ FitBV null ");
+      }
+      break;
+  }
+
+  s.append("                                ");
+  s.setChar(26, ']');
+  s.setChar(27, '\0');
+  printf("%s", s.getCString());
+}
+
+static void printDestinations(PDFDoc *doc, UnicodeMap *uMap) {
+  std::map<Ref,std::map<GooString*,LinkDest*,GooStringCompare>, RefCompare > map;
+
+  int numDests = doc->getCatalog()->numDestNameTree();
+  for (int i = 0; i < numDests; i++) {
+    GooString *name = new GooString(doc->getCatalog()->getDestNameTreeName(i));
+    LinkDest *dest = doc->getCatalog()->getDestNameTreeDest(i);
+    if (dest && dest->isPageRef()) {
+      map[dest->getPageRef()].insert(std::make_pair(name, dest));
+    } else {
+      delete name;
+      delete dest;
+    }
+  }
+
+  numDests = doc->getCatalog()->numDests();
+  for (int i = 0; i < numDests; i++) {
+    GooString *name = new GooString(doc->getCatalog()->getDestsName(i));
+    LinkDest *dest = doc->getCatalog()->getDestsDest(i);
+    if (dest && dest->isPageRef()) {
+      map[dest->getPageRef()].insert(std::make_pair(name, dest));
+    } else {
+      delete name;
+      delete dest;
+    }
+  }
+
+  printf("Page  Destination                 Name\n");
+  for (int i = firstPage; i <= lastPage; i++) {
+    Ref *ref = doc->getCatalog()->getPageRef(i);
+    if (ref) {
+      auto pageDests = map.find(*ref);
+      if (pageDests != map.end()) {
+	for (auto& it: pageDests->second) {
+	  printf("%4d ", i);
+	  printLinkDest(it.second);
+	  printf(" \"");
+	  Unicode *u;
+	  char buf[8];
+	  int n, len;
+	  len = TextStringToUCS4(it.first, &u);
+	  for (int i = 0; i < len; i++) {
+	    n = uMap->mapUnicode(u[i], buf, sizeof(buf));
+	    fwrite(buf, 1, n, stdout);
+	  }
+	  gfree(u);
+	  printf("\"\n");
+	  delete it.first;
+	  delete it.second;
+	}
+      }
+    }
+  }
+}
+
+static void printInfo(PDFDoc *doc, UnicodeMap *uMap, long long filesize, GBool multiPage) {
+  Page *page;
+  char buf[256];
+  double w, h, wISO, hISO;
+  int pg, i;
+  int r;
+
+  // print doc info
+  Object info = doc->getDocInfo();
+  if (info.isDict()) {
+    printInfoString(info.getDict(), "Title",        "Title:          ", uMap);
+    printInfoString(info.getDict(), "Subject",      "Subject:        ", uMap);
+    printInfoString(info.getDict(), "Keywords",     "Keywords:       ", uMap);
+    printInfoString(info.getDict(), "Author",       "Author:         ", uMap);
+    printInfoString(info.getDict(), "Creator",      "Creator:        ", uMap);
+    printInfoString(info.getDict(), "Producer",     "Producer:       ", uMap);
+    if (isoDates) {
+      printISODate(info.getDict(),   "CreationDate", "CreationDate:   ");
+      printISODate(info.getDict(),   "ModDate",      "ModDate:        ");
+    } else if (rawDates) {
+      printInfoString(info.getDict(), "CreationDate", "CreationDate:   ",
+		      uMap);
+      printInfoString(info.getDict(), "ModDate",      "ModDate:        ",
+		      uMap);
+    } else {
+      printInfoDate(info.getDict(),   "CreationDate", "CreationDate:   ");
+      printInfoDate(info.getDict(),   "ModDate",      "ModDate:        ");
+    }
+  }
+
+  // print tagging info
+   printf("Tagged:         %s\n",
+	  (doc->getCatalog()->getMarkInfo() & Catalog::markInfoMarked) ? "yes" : "no");
+   printf("UserProperties: %s\n",
+	  (doc->getCatalog()->getMarkInfo() & Catalog::markInfoUserProperties) ? "yes" : "no");
+   printf("Suspects:       %s\n",
+	  (doc->getCatalog()->getMarkInfo() & Catalog::markInfoSuspects) ? "yes" : "no");
+
+  // print form info
+  switch (doc->getCatalog()->getFormType())
+  {
+    case Catalog::NoForm:
+      printf("Form:           none\n");
+      break;
+    case Catalog::AcroForm:
+      printf("Form:           AcroForm\n");
+      break;
+    case Catalog::XfaForm:
+      printf("Form:           XFA\n");
+      break;
+  }
+
+  // print javascript info
+  {
+    JSInfo jsInfo(doc, firstPage - 1);
+    jsInfo.scanJS(lastPage - firstPage + 1);
+    printf("JavaScript:     %s\n", jsInfo.containsJS() ? "yes" : "no");
+  }
+
+  // print page count
+  printf("Pages:          %d\n", doc->getNumPages());
+
+  // print encryption info
+  printf("Encrypted:      ");
+  if (doc->isEncrypted()) {
+    Guchar *fileKey;
+    CryptAlgorithm encAlgorithm;
+    int keyLength;
+    doc->getXRef()->getEncryptionParameters(&fileKey, &encAlgorithm, &keyLength);
+
+    const char *encAlgorithmName = "unknown";
+    switch (encAlgorithm)
+    {
+      case cryptRC4:
+	encAlgorithmName = "RC4";
+	break;
+      case cryptAES:
+	encAlgorithmName = "AES";
+	break;
+      case cryptAES256:
+	encAlgorithmName = "AES-256";
+	break;
+      case cryptNone:
+	break;
+    }
+
+    printf("yes (print:%s copy:%s change:%s addNotes:%s algorithm:%s)\n",
+	   doc->okToPrint(gTrue) ? "yes" : "no",
+	   doc->okToCopy(gTrue) ? "yes" : "no",
+	   doc->okToChange(gTrue) ? "yes" : "no",
+	   doc->okToAddNotes(gTrue) ? "yes" : "no",
+	   encAlgorithmName);
+  } else {
+    printf("no\n");
+  }
+
+  // print page size
+  for (pg = firstPage; pg <= lastPage; ++pg) {
+    w = doc->getPageCropWidth(pg);
+    h = doc->getPageCropHeight(pg);
+    if (multiPage) {
+      printf("Page %4d size: %g x %g pts", pg, w, h);
+    } else {
+      printf("Page size:      %g x %g pts", w, h);
+    }
+    if ((fabs(w - 612) < 0.1 && fabs(h - 792) < 0.1) ||
+	(fabs(w - 792) < 0.1 && fabs(h - 612) < 0.1)) {
+      printf(" (letter)");
+    } else {
+      hISO = sqrt(sqrt(2.0)) * 7200 / 2.54;
+      wISO = hISO / sqrt(2.0);
+      for (i = 0; i <= 6; ++i) {
+	if ((fabs(w - wISO) < 1 && fabs(h - hISO) < 1) ||
+	    (fabs(w - hISO) < 1 && fabs(h - wISO) < 1)) {
+	  printf(" (A%d)", i);
+	  break;
+	}
+	hISO = wISO;
+	wISO /= sqrt(2.0);
+      }
+    }
+    printf("\n");
+    r = doc->getPageRotate(pg);
+    if (multiPage) {
+      printf("Page %4d rot:  %d\n", pg, r);
+    } else {
+      printf("Page rot:       %d\n", r);
+    }
+  }
+
+  // print the boxes
+  if (printBoxes) {
+    if (multiPage) {
+      for (pg = firstPage; pg <= lastPage; ++pg) {
+	page = doc->getPage(pg);
+	if (!page) {
+          error(errSyntaxError, -1, "Failed to print boxes for page {0:d}", pg);
+	  continue;
+	}
+	sprintf(buf, "Page %4d MediaBox: ", pg);
+	printBox(buf, page->getMediaBox());
+	sprintf(buf, "Page %4d CropBox:  ", pg);
+	printBox(buf, page->getCropBox());
+	sprintf(buf, "Page %4d BleedBox: ", pg);
+	printBox(buf, page->getBleedBox());
+	sprintf(buf, "Page %4d TrimBox:  ", pg);
+	printBox(buf, page->getTrimBox());
+	sprintf(buf, "Page %4d ArtBox:   ", pg);
+	printBox(buf, page->getArtBox());
+      }
+    } else {
+      page = doc->getPage(firstPage);
+      if (!page) {
+        error(errSyntaxError, -1, "Failed to print boxes for page {0:d}", firstPage);
+      } else {
+        printBox("MediaBox:       ", page->getMediaBox());
+        printBox("CropBox:        ", page->getCropBox());
+        printBox("BleedBox:       ", page->getBleedBox());
+        printBox("TrimBox:        ", page->getTrimBox());
+        printBox("ArtBox:         ", page->getArtBox());
+      }
+    }
+  }
+
+  // print file size
+  printf("File size:      %lld bytes\n", filesize);
+
+  // print linearization info
+  printf("Optimized:      %s\n", doc->isLinearized() ? "yes" : "no");
+
+  // print PDF version
+  printf("PDF version:    %d.%d\n", doc->getPDFMajorVersion(), doc->getPDFMinorVersion());
+}
+
 int main(int argc, char *argv[]) {
   PDFDoc *doc;
   GooString *fileName;
   GooString *ownerPW, *userPW;
   UnicodeMap *uMap;
-  Page *page;
   Object info;
-  char buf[256];
-  double w, h, wISO, hISO;
   FILE *f;
-  GooString *metadata;
   GBool ok;
   int exitCode;
-  int pg, i;
   GBool multiPage;
-  int r;
 
   exitCode = 99;
 
@@ -141,6 +628,9 @@ int main(int argc, char *argv[]) {
       exitCode = 0;
     goto err0;
   }
+
+  if (printStructureText)
+    printStructure = gTrue;
 
   // read config file
   globalParams = new GlobalParams();
@@ -201,7 +691,6 @@ int main(int argc, char *argv[]) {
   }
   if (lastPage == 0) {
     multiPage = gFalse;
-    lastPage = 1;
   } else {
     multiPage = gTrue;
   }
@@ -215,192 +704,48 @@ int main(int argc, char *argv[]) {
     goto err2;
   }
 
-  // print doc info
-  doc->getDocInfo(&info);
-  if (info.isDict()) {
-    printInfoString(info.getDict(), "Title",        "Title:          ", uMap);
-    printInfoString(info.getDict(), "Subject",      "Subject:        ", uMap);
-    printInfoString(info.getDict(), "Keywords",     "Keywords:       ", uMap);
-    printInfoString(info.getDict(), "Author",       "Author:         ", uMap);
-    printInfoString(info.getDict(), "Creator",      "Creator:        ", uMap);
-    printInfoString(info.getDict(), "Producer",     "Producer:       ", uMap);
-    if (rawDates) {
-      printInfoString(info.getDict(), "CreationDate", "CreationDate:   ",
-		      uMap);
-      printInfoString(info.getDict(), "ModDate",      "ModDate:        ",
-		      uMap);
-    } else {
-      printInfoDate(info.getDict(),   "CreationDate", "CreationDate:   ");
-      printInfoDate(info.getDict(),   "ModDate",      "ModDate:        ");
+  if (printMetadata) {
+    // print the metadata
+    GooString *metadata = doc->readMetadata();
+    if (metadata) {
+      fputs(metadata->getCString(), stdout);
+      fputc('\n', stdout);
+      delete metadata;
     }
-  }
-  info.free();
-
-  // print tagging info
-   printf("Tagged:         %s\n",
-	  (doc->getCatalog()->getMarkInfo() & Catalog::markInfoMarked) ? "yes" : "no");
-   printf("UserProperties: %s\n",
-	  (doc->getCatalog()->getMarkInfo() & Catalog::markInfoUserProperties) ? "yes" : "no");
-   printf("Suspects:       %s\n",
-	  (doc->getCatalog()->getMarkInfo() & Catalog::markInfoSuspects) ? "yes" : "no");
-
-  // print form info
-  switch (doc->getCatalog()->getFormType())
-  {
-    case Catalog::NoForm:
-      printf("Form:           none\n");
-      break;
-    case Catalog::AcroForm:
-      printf("Form:           AcroForm\n");
-      break;
-    case Catalog::XfaForm:
-      printf("Form:           XFA\n");
-      break;
-  }
-
-  // print javascript info
-  {
+  } else if (printJS) {
+    // print javascript
     JSInfo jsInfo(doc, firstPage - 1);
-    jsInfo.scanJS(lastPage - firstPage + 1);
-    printf("JavaScript:     %s\n", jsInfo.containsJS() ? "yes" : "no");
-  }
-
-  // print page count
-  printf("Pages:          %d\n", doc->getNumPages());
-
-  // print encryption info
-  printf("Encrypted:      ");
-  if (doc->isEncrypted()) {
-    Guchar *fileKey;
-    CryptAlgorithm encAlgorithm;
-    int keyLength;
-    doc->getXRef()->getEncryptionParameters(&fileKey, &encAlgorithm, &keyLength);
-
-    const char *encAlgorithmName = "unknown";
-    switch (encAlgorithm)
-    {
-      case cryptRC4:
-	encAlgorithmName = "RC4";
-	break;
-      case cryptAES:
-	encAlgorithmName = "AES";
-	break;
-      case cryptAES256:
-	encAlgorithmName = "AES-256";
-	break;
-    }
-
-    printf("yes (print:%s copy:%s change:%s addNotes:%s algorithm:%s)\n",
-	   doc->okToPrint(gTrue) ? "yes" : "no",
-	   doc->okToCopy(gTrue) ? "yes" : "no",
-	   doc->okToChange(gTrue) ? "yes" : "no",
-	   doc->okToAddNotes(gTrue) ? "yes" : "no",
-	   encAlgorithmName);
-  } else {
-    printf("no\n");
-  }
-
-  // print page size
-  for (pg = firstPage; pg <= lastPage; ++pg) {
-    w = doc->getPageCropWidth(pg);
-    h = doc->getPageCropHeight(pg);
-    if (multiPage) {
-      printf("Page %4d size: %g x %g pts", pg, w, h);
-    } else {
-      printf("Page size:      %g x %g pts", w, h);
-    }
-    if ((fabs(w - 612) < 0.1 && fabs(h - 792) < 0.1) ||
-	(fabs(w - 792) < 0.1 && fabs(h - 612) < 0.1)) {
-      printf(" (letter)");
-    } else {
-      hISO = sqrt(sqrt(2.0)) * 7200 / 2.54;
-      wISO = hISO / sqrt(2.0);
-      for (i = 0; i <= 6; ++i) {
-	if ((fabs(w - wISO) < 1 && fabs(h - hISO) < 1) ||
-	    (fabs(w - hISO) < 1 && fabs(h - wISO) < 1)) {
-	  printf(" (A%d)", i);
-	  break;
-	}
-	hISO = wISO;
-	wISO /= sqrt(2.0);
-      }
-    }
-    printf("\n");
-    r = doc->getPageRotate(pg);
-    if (multiPage) {
-      printf("Page %4d rot:  %d\n", pg, r);
-    } else {
-      printf("Page rot:       %d\n", r);
-    }
-  } 
-
-  // print the boxes
-  if (printBoxes) {
-    if (multiPage) {
-      for (pg = firstPage; pg <= lastPage; ++pg) {
-	page = doc->getPage(pg);
-	if (!page) {
-          error(errSyntaxError, -1, "Failed to print boxes for page {0:d}", pg);
-	  continue;
-	}
-	sprintf(buf, "Page %4d MediaBox: ", pg);
-	printBox(buf, page->getMediaBox());
-	sprintf(buf, "Page %4d CropBox:  ", pg);
-	printBox(buf, page->getCropBox());
-	sprintf(buf, "Page %4d BleedBox: ", pg);
-	printBox(buf, page->getBleedBox());
-	sprintf(buf, "Page %4d TrimBox:  ", pg);
-	printBox(buf, page->getTrimBox());
-	sprintf(buf, "Page %4d ArtBox:   ", pg);
-	printBox(buf, page->getArtBox());
-      }
-    } else {
-      page = doc->getPage(firstPage);
-      if (!page) {
-        error(errSyntaxError, -1, "Failed to print boxes for page {0:d}", firstPage);
-      } else {
-        printBox("MediaBox:       ", page->getMediaBox());
-        printBox("CropBox:        ", page->getCropBox());
-        printBox("BleedBox:       ", page->getBleedBox());
-        printBox("TrimBox:        ", page->getTrimBox());
-        printBox("ArtBox:         ", page->getArtBox());
-      }
-    }
-  }
-
-  // print file size
-#ifdef VMS
-  f = fopen(fileName->getCString(), "rb", "ctx=stm");
-#else
-  f = fopen(fileName->getCString(), "rb");
-#endif
-  if (f) {
-    Gfseek(f, 0, SEEK_END);
-    printf("File size:      %lld bytes\n", (long long)Gftell(f));
-    fclose(f);
-  }
-
-  // print linearization info
-  printf("Optimized:      %s\n", doc->isLinearized() ? "yes" : "no");
-
-  // print PDF version
-  printf("PDF version:    %d.%d\n", doc->getPDFMajorVersion(), doc->getPDFMinorVersion());
-
-  // print the metadata
-  if (printMetadata && (metadata = doc->readMetadata())) {
-    fputs("Metadata:\n", stdout);
-    fputs(metadata->getCString(), stdout);
-    fputc('\n', stdout);
-    delete metadata;
-  }
-
-  // print javascript
-  if (printJS) {
-    JSInfo jsInfo(doc, firstPage - 1);
-    fputs("\n", stdout);
     jsInfo.scanJS(lastPage - firstPage + 1, stdout, uMap);
-  }
+  } else if (printStructure || printStructureText) {
+    // print structure
+    const StructTreeRoot *structTree = doc->getCatalog()->getStructTreeRoot();
+    if (structTree) {
+      for (unsigned i = 0; i < structTree->getNumChildren(); i++) {
+	printStruct(structTree->getChild(i), 0);
+      }
+    }
+  } else if (printDests) {
+    printDestinations(doc, uMap);
+  } else {
+    // print info
+    long long filesize = 0;
 
+#ifdef VMS
+    f = fopen(fileName->getCString(), "rb", "ctx=stm");
+#else
+    f = fopen(fileName->getCString(), "rb");
+#endif
+    if (f) {
+      Gfseek(f, 0, SEEK_END);
+      filesize = Gftell(f);
+      fclose(f);
+    }
+
+    if (multiPage == gFalse)
+      lastPage = 1;
+
+    printInfo(doc, uMap, filesize, multiPage);
+  }
   exitCode = 0;
 
   // clean up
@@ -417,67 +762,4 @@ int main(int argc, char *argv[]) {
   gMemReport(stderr);
 
   return exitCode;
-}
-
-static void printInfoString(Dict *infoDict, const char *key, const char *text,
-			    UnicodeMap *uMap) {
-  Object obj;
-  GooString *s1;
-  Unicode *u;
-  char buf[8];
-  int i, n, len;
-
-  if (infoDict->lookup(key, &obj)->isString()) {
-    fputs(text, stdout);
-    s1 = obj.getString();
-    len = TextStringToUCS4(s1, &u);
-    for (i = 0; i < len; i++) {
-      n = uMap->mapUnicode(u[i], buf, sizeof(buf));
-      fwrite(buf, 1, n, stdout);
-    }
-    fputc('\n', stdout);
-  }
-  obj.free();
-}
-
-static void printInfoDate(Dict *infoDict, const char *key, const char *text) {
-  Object obj;
-  char *s;
-  int year, mon, day, hour, min, sec, tz_hour, tz_minute;
-  char tz;
-  struct tm tmStruct;
-  char buf[256];
-
-  if (infoDict->lookup(key, &obj)->isString()) {
-    fputs(text, stdout);
-    s = obj.getString()->getCString();
-    // TODO do something with the timezone info
-    if ( parseDateString( s, &year, &mon, &day, &hour, &min, &sec, &tz, &tz_hour, &tz_minute ) ) {
-      tmStruct.tm_year = year - 1900;
-      tmStruct.tm_mon = mon - 1;
-      tmStruct.tm_mday = day;
-      tmStruct.tm_hour = hour;
-      tmStruct.tm_min = min;
-      tmStruct.tm_sec = sec;
-      tmStruct.tm_wday = -1;
-      tmStruct.tm_yday = -1;
-      tmStruct.tm_isdst = -1;
-      // compute the tm_wday and tm_yday fields
-      if (mktime(&tmStruct) != (time_t)-1 &&
-	  strftime(buf, sizeof(buf), "%c", &tmStruct)) {
-	fputs(buf, stdout);
-      } else {
-	fputs(s, stdout);
-      }
-    } else {
-      fputs(s, stdout);
-    }
-    fputc('\n', stdout);
-  }
-  obj.free();
-}
-
-static void printBox(const char *text, PDFRectangle *box) {
-  printf("%s%8.2f %8.2f %8.2f %8.2f\n",
-	 text, box->x1, box->y1, box->x2, box->y2);
 }

@@ -19,7 +19,7 @@
 // Copyright (C) 2009 Shen Liang <shenzhuxi@gmail.com>
 // Copyright (C) 2009 Stefan Thomas <thomas@eload24.com>
 // Copyright (C) 2009-2011, 2015 Albert Astals Cid <aacid@kde.org>
-// Copyright (C) 2010, 2012 Adrian Johnson <ajohnson@redneon.com>
+// Copyright (C) 2010, 2012, 2017 Adrian Johnson <ajohnson@redneon.com>
 // Copyright (C) 2010 Hib Eris <hib@hiberis.nl>
 // Copyright (C) 2010 Jonathan Liu <net147@gmail.com>
 // Copyright (C) 2010 William Bader <williambader@hotmail.com>
@@ -87,7 +87,10 @@ static GBool png = gFalse;
 static GBool jpeg = gFalse;
 static GBool jpegcmyk = gFalse;
 static GBool tiff = gFalse;
-#if SPLASH_CMYK
+static GooString jpegOpt;
+static int jpegQuality = -1;
+static bool jpegProgressive = false;
+#ifdef SPLASH_CMYK
 static GBool overprint = gFalse;
 #endif
 static char enableFreeTypeStr[16] = "";
@@ -149,32 +152,32 @@ static const ArgDesc argDesc[] = {
    "generate a monochrome PBM file"},
   {"-gray",   argFlag,     &gray,          0,
    "generate a grayscale PGM file"},
-#if ENABLE_LIBPNG
+#ifdef ENABLE_LIBPNG
   {"-png",    argFlag,     &png,           0,
    "generate a PNG file"},
 #endif
-#if ENABLE_LIBJPEG
+#ifdef ENABLE_LIBJPEG
   {"-jpeg",   argFlag,     &jpeg,           0,
    "generate a JPEG file"},
-#if SPLASH_CMYK
+#ifdef SPLASH_CMYK
   {"-jpegcmyk",argFlag,    &jpegcmyk,       0,
    "generate a CMYK JPEG file"},
 #endif
+  {"-jpegopt",  argGooString, &jpegOpt,    0,
+   "jpeg options, with format <opt1>=<val1>[,<optN>=<valN>]*"},
 #endif
-#if SPLASH_CMYK
+#ifdef SPLASH_CMYK
   {"-overprint",argFlag,   &overprint,      0,
    "enable overprint"},
 #endif
-#if ENABLE_LIBTIFF
+#ifdef ENABLE_LIBTIFF
   {"-tiff",    argFlag,     &tiff,           0,
    "generate a TIFF file"},
   {"-tiffcompression", argString, TiffCompressionStr, sizeof(TiffCompressionStr),
    "set TIFF compression: none, packbits, jpeg, lzw, deflate"},
 #endif
-#if HAVE_FREETYPE_FREETYPE_H | HAVE_FREETYPE_H
   {"-freetype",   argString,      enableFreeTypeStr, sizeof(enableFreeTypeStr),
    "enable FreeType font rasterizer: yes, no"},
-#endif
   {"-thinlinemode", argString, thinLineModeStr, sizeof(thinLineModeStr),
    "set thin line mode: none, solid, shape. Default: none"},
   
@@ -208,6 +211,58 @@ static const ArgDesc argDesc[] = {
   {NULL}
 };
 
+static GBool parseJpegOptions()
+{
+  //jpegOpt format is: <opt1>=<val1>,<opt2>=<val2>,...
+  const char *nextOpt = jpegOpt.getCString();
+  while (nextOpt && *nextOpt)
+  {
+    const char *comma = strchr(nextOpt, ',');
+    GooString opt;
+    if (comma) {
+      opt.Set(nextOpt, comma - nextOpt);
+      nextOpt = comma + 1;
+    } else {
+      opt.Set(nextOpt);
+      nextOpt = NULL;
+    }
+    //here opt is "<optN>=<valN> "
+    const char *equal = strchr(opt.getCString(), '=');
+    if (!equal) {
+      fprintf(stderr, "Unknown jpeg option \"%s\"\n", opt.getCString());
+      return gFalse;
+    }
+    int iequal = equal - opt.getCString();
+    GooString value(&opt, iequal + 1, opt.getLength() - iequal - 1);
+    opt.del(iequal, opt.getLength() - iequal);
+    //here opt is "<optN>" and value is "<valN>"
+
+    if (opt.cmp("quality") == 0) {
+      if (!isInt(value.getCString())) {
+	fprintf(stderr, "Invalid jpeg quality\n");
+	return gFalse;
+      }
+      jpegQuality = atoi(value.getCString());
+      if (jpegQuality < 0 || jpegQuality > 100) {
+	fprintf(stderr, "jpeg quality must be between 0 and 100\n");
+	return gFalse;
+      }
+    } else if (opt.cmp("progressive") == 0) {
+      jpegProgressive = gFalse;
+      if (value.cmp("y") == 0) {
+	jpegProgressive = gTrue;
+      } else if (value.cmp("n") != 0) {
+	fprintf(stderr, "jpeg progressive option must be \"y\" or \"n\"\n");
+	return gFalse;
+      }
+    } else {
+      fprintf(stderr, "Unknown jpeg option \"%s\"\n", opt.getCString());
+      return gFalse;
+    }
+  }
+  return gTrue;
+}
+
 static void savePageSlice(PDFDoc *doc,
                    SplashOutputDev *splashOut, 
                    int pg, int x, int y, int w, int h, 
@@ -225,16 +280,21 @@ static void savePageSlice(PDFDoc *doc,
   );
 
   SplashBitmap *bitmap = splashOut->getBitmap();
-  
+
+  SplashBitmap::WriteImgParams params;
+  params.jpegQuality = jpegQuality;
+  params.jpegProgressive = jpegProgressive;
+  params.tiffCompression.Set(TiffCompressionStr);
+
   if (ppmFile != NULL) {
     if (png) {
       bitmap->writeImgFile(splashFormatPng, ppmFile, x_resolution, y_resolution);
     } else if (jpeg) {
-      bitmap->writeImgFile(splashFormatJpeg, ppmFile, x_resolution, y_resolution);
+      bitmap->writeImgFile(splashFormatJpeg, ppmFile, x_resolution, y_resolution, &params);
     } else if (jpegcmyk) {
-      bitmap->writeImgFile(splashFormatJpegCMYK, ppmFile, x_resolution, y_resolution);
+      bitmap->writeImgFile(splashFormatJpegCMYK, ppmFile, x_resolution, y_resolution, &params);
     } else if (tiff) {
-      bitmap->writeImgFile(splashFormatTiff, ppmFile, x_resolution, y_resolution, TiffCompressionStr);
+      bitmap->writeImgFile(splashFormatTiff, ppmFile, x_resolution, y_resolution, &params);
     } else {
       bitmap->writePNMFile(ppmFile);
     }
@@ -246,9 +306,9 @@ static void savePageSlice(PDFDoc *doc,
     if (png) {
       bitmap->writeImgFile(splashFormatPng, stdout, x_resolution, y_resolution);
     } else if (jpeg) {
-      bitmap->writeImgFile(splashFormatJpeg, stdout, x_resolution, y_resolution);
+      bitmap->writeImgFile(splashFormatJpeg, stdout, x_resolution, y_resolution, &params);
     } else if (tiff) {
-      bitmap->writeImgFile(splashFormatTiff, stdout, x_resolution, y_resolution, TiffCompressionStr);
+      bitmap->writeImgFile(splashFormatTiff, stdout, x_resolution, y_resolution, &params);
     } else {
       bitmap->writePNMFile(stdout);
     }
@@ -288,7 +348,7 @@ static void processPageJobs() {
     // process the job    
     SplashOutputDev *splashOut = new SplashOutputDev(mono ? splashModeMono1 :
                   gray ? splashModeMono8 :
-#if SPLASH_CMYK
+#ifdef SPLASH_CMYK
         			    (jpegcmyk || overprint) ? splashModeDeviceN8 :
 #endif
 		              splashModeRGB8, 4, gFalse, *pageJob.paperColor, gTrue, thinLineMode);
@@ -372,6 +432,12 @@ int main(int argc, char *argv[]) {
     }
   }
 
+  if (jpegOpt.getLength() > 0) {
+    if (!jpeg)
+      fprintf(stderr, "Warning: -jpegopt only valid with jpeg output.\n");
+    parseJpegOptions();
+  }
+
   // read config file
   globalParams = new GlobalParams();
   if (enableFreeTypeStr[0]) {
@@ -449,7 +515,7 @@ int main(int argc, char *argv[]) {
   }
 
   // write PPM files
-#if SPLASH_CMYK
+#ifdef SPLASH_CMYK
   if (jpegcmyk || overprint) {
     globalParams->setOverprintPreview(gTrue);
     for (int cp = 0; cp < SPOT_NCOMPS+4; cp++)
@@ -466,7 +532,7 @@ int main(int argc, char *argv[]) {
 
   splashOut = new SplashOutputDev(mono ? splashModeMono1 :
 				    gray ? splashModeMono8 :
-#if SPLASH_CMYK
+#ifdef SPLASH_CMYK
 				    (jpegcmyk || overprint) ? splashModeDeviceN8 :
 #endif
 				             splashModeRGB8, 4,

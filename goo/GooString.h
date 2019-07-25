@@ -17,9 +17,12 @@
 //
 // Copyright (C) 2006 Kristian Høgsberg <krh@redhat.com>
 // Copyright (C) 2006 Krzysztof Kowalczyk <kkowalczyk@gmail.com>
-// Copyright (C) 2008-2010, 2012, 2014 Albert Astals Cid <aacid@kde.org>
+// Copyright (C) 2008-2010, 2012, 2014, 2017 Albert Astals Cid <aacid@kde.org>
 // Copyright (C) 2012-2014 Fabio D'Urso <fabiodurso@hotmail.it>
 // Copyright (C) 2013 Jason Crain <jason@aquaticape.us>
+// Copyright (C) 2015 Adam Reichold <adam.reichold@t-online.de>
+// Copyright (C) 2016 Jakub Alba <jakubalba@gmail.com>
+// Copyright (C) 2017 Adrian Johnson <ajohnson@redneon.com>
 //
 // To see a description of the changes please see the Changelog file that
 // came with your tarball or type make ChangeLog if you are building from git
@@ -33,7 +36,6 @@
 #pragma interface
 #endif
 
-#include <limits.h> // for LLONG_MAX and ULLONG_MAX
 #include <stdarg.h>
 #include <stdlib.h> // for NULL
 #include "gtypes.h"
@@ -64,11 +66,10 @@ public:
   // Create a string from <lengthA> chars at <idx> in <str>.
   GooString(GooString *str, int idx, int lengthA);
 
-  // Set content of a string to concatination of <s1> and <s2>. They can both
-  // be NULL. if <s1Len> or <s2Len> is CALC_STRING_LEN, then length of the string
-  // will be calculated with strlen(). Otherwise we assume they are a valid
-  // length of string (or its substring)
-  GooString* Set(const char *s1, int s1Len=CALC_STRING_LEN, const char *s2=NULL, int s2Len=CALC_STRING_LEN);
+  // Set content of a string to <newStr>. If <newLen> is CALC_STRING_LEN, then
+  // length of the string will be calculated with strlen(). Otherwise we assume
+  // this is a valid length of <newStr> (or its substring)
+  GooString* Set(const char *newStr, int newLen=CALC_STRING_LEN);
 
   // Copy a string.
   explicit GooString(const GooString *str);
@@ -114,13 +115,14 @@ public:
   ~GooString();
 
   // Get length.
-  int getLength() { return length; }
+  int getLength() const { return length; }
 
   // Get C string.
-  char *getCString() const { return s; }
+  char *getCString() { return s; }
+  const char *getCString() const { return s; }
 
   // Get <i>th character.
-  char getChar(int i) { return s[i]; }
+  char getChar(int i) const { return s[i]; }
 
   // Change <i>th character.
   void setChar(int i, char c) { s[i] = c; }
@@ -158,23 +160,25 @@ public:
   // Return true if string ends with suffix
   GBool endsWith(const char *suffix) const;
 
-  GBool hasUnicodeMarker(void);
+  GBool hasUnicodeMarker(void) const;
+  void prependUnicodeMarker();
+  GBool hasJustUnicodeMarker(void) const { return length == 2 && hasUnicodeMarker(); }
 
   // Sanitizes the string so that it does
   // not contain any ( ) < > [ ] { } / %
   // The postscript mode also has some more strict checks
   // The caller owns the return value
-  GooString *sanitizedName(GBool psmode);
+  GooString *sanitizedName(GBool psmode) const;
 
 private:
   GooString(const GooString &other);
   GooString& operator=(const GooString &other);
 
-  // you can tweak this number for a different speed/memory usage tradeoffs.
-  // In libc malloc() rounding is 16 so it's best to choose a value that
-  // results in sizeof(GooString) be a multiple of 16.
-  // 24 makes sizeof(GooString) to be 32.
-  static const int STR_STATIC_SIZE = 24;
+  // You can tweak the final object size for different time/space tradeoffs.
+  // In libc malloc(), rounding is 16 so it's best to choose a value that
+  // is a multiple of 16.
+  static const int STR_FINAL_SIZE = 32;
+  static const int STR_STATIC_SIZE = STR_FINAL_SIZE - sizeof(int) - sizeof(char*);
 
   int  roundedSize(int len);
 
@@ -183,24 +187,12 @@ private:
   char *s;
 
   void resize(int newLength);
-#ifdef LLONG_MAX
   static void formatInt(long long x, char *buf, int bufSize,
 			GBool zeroFill, int width, int base,
 			char **p, int *len, GBool upperCase = gFalse);
-#else
-  static void formatInt(long x, char *buf, int bufSize,
-			GBool zeroFill, int width, int base,
-			char **p, int *len, GBool upperCase = gFalse);
-#endif
-#ifdef ULLONG_MAX
   static void formatUInt(unsigned long long x, char *buf, int bufSize,
 			 GBool zeroFill, int width, int base,
 			 char **p, int *len, GBool upperCase = gFalse);
-#else
-  static void formatUInt(Gulong x, char *buf, int bufSize,
-			 GBool zeroFill, int width, int base,
-			 char **p, int *len, GBool upperCase = gFalse);
-#endif
   static void formatDouble(double x, char *buf, int bufSize, int prec,
 			   GBool trim, char **p, int *len);
   static void formatDoubleSmallAware(double x, char *buf, int bufSize, int prec,

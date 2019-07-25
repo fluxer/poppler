@@ -10,10 +10,10 @@ if (ENABLE_SPLASH)
     target_link_libraries(perf-test poppler)
     if (LIB_RT_HAS_NANOSLEEP)
       target_link_libraries(perf-test rt)
-    endif (LIB_RT_HAS_NANOSLEEP)
-  endif (HAVE_NANOSLEEP OR LIB_RT_HAS_NANOSLEEP)
+    endif ()
+  endif ()
 
-endif (ENABLE_SPLASH)
+endif ()
 
 if (GTK_FOUND)
 
@@ -28,7 +28,7 @@ if (GTK_FOUND)
     gtk-test.cc
   )
   poppler_add_test(gtk-test BUILD_GTK_TESTS ${gtk_splash_test_SRCS})
-  target_link_libraries(gtk-test poppler-glib ${GTK3_LIBRARIES})
+  target_link_libraries(gtk-test ${CAIRO_LIBRARIES} poppler-glib ${GTK3_LIBRARIES})
 
   if (HAVE_CAIRO)
 
@@ -36,11 +36,11 @@ if (GTK_FOUND)
       pdf-inspector.cc
     )
     poppler_add_test(pdf-inspector BUILD_GTK_TESTS ${pdf_inspector_SRCS})
-    target_link_libraries(pdf-inspector poppler-glib ${GTK3_LIBRARIES})
+    target_link_libraries(pdf-inspector ${CAIRO_LIBRARIES} poppler-glib ${GTK3_LIBRARIES})
 
-  endif (HAVE_CAIRO)
+  endif ()
 
-endif (GTK_FOUND)
+endif ()
 
 set (pdf_fullrewrite_SRCS
   pdf-fullrewrite.cc

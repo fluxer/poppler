@@ -5,10 +5,11 @@
 // This file is licensed under the GPLv2 or later
 //
 // Copyright (C) 2011, 2012, 2015 Thomas Freitag <Thomas.Freitag@alfa.de>
-// Copyright (C) 2012-2014 Albert Astals Cid <aacid@kde.org>
-// Copyright (C) 2013 Pino Toscano <pino@kde.org>
+// Copyright (C) 2012-2014, 2017 Albert Astals Cid <aacid@kde.org>
+// Copyright (C) 2013, 2016 Pino Toscano <pino@kde.org>
 // Copyright (C) 2013 Daniel Kahn Gillmor <dkg@fifthhorseman.net>
 // Copyright (C) 2013 Suzuki Toshiya <mpsuzuki@hiroshima-u.ac.jp>
+// Copyright (C) 2017 Léonard Michelet <leonard.michelet@smile.fr>
 //
 //========================================================================
 #include "config.h"
@@ -47,7 +48,7 @@ static const ArgDesc argDesc[] = {
   {NULL}
 };
 
-bool extractPages (const char *srcFileName, const char *destFileName) {
+static bool extractPages (const char *srcFileName, const char *destFileName) {
   char pathName[4096];
   GooString *gfileName = new GooString (srcFileName);
   PDFDoc *doc = new PDFDoc (gfileName, NULL, NULL, NULL);
@@ -97,7 +98,7 @@ bool extractPages (const char *srcFileName, const char *destFileName) {
     }
   }
   if (!foundmatch && firstPage != lastPage) {
-    error(errSyntaxError, -1, "'{0:s}' must contain '%%d' if more than one page should be extracted", destFileName);
+    error(errSyntaxError, -1, "'{0:s}' must contain '%d' (or any variant respecting printf format) if more than one page should be extracted, in order to print the page number", destFileName);
     free(auxDestFileName);
     delete doc;
     return false;

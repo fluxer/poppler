@@ -68,5 +68,3 @@ void FontsDock::documentClosed()
     m_table->setRowCount(0);
     AbstractInfoDock::documentClosed();
 }
-
-#include "fonts.moc"

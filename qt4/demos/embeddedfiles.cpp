@@ -78,5 +78,3 @@ void EmbeddedFilesDock::documentClosed()
     m_table->setRowCount(0);
     AbstractInfoDock::documentClosed();
 }
-
-#include "embeddedfiles.moc"

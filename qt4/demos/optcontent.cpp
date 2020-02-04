@@ -65,5 +65,3 @@ void OptContentDock::reloadImage()
 {
     reloadPage();
 }
-
-#include "optcontent.moc"

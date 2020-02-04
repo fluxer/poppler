@@ -68,5 +68,3 @@ void InfoDock::documentClosed()
     m_table->setRowCount(0);
     AbstractInfoDock::documentClosed();
 }
-
-#include "info.moc"

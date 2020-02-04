@@ -53,5 +53,3 @@ void AbstractInfoDock::slotVisibilityChanged(bool visible)
         m_filled = true;
     }
 }
-
-#include "abstractinfodock.moc"

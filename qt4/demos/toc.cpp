@@ -84,5 +84,3 @@ void TocDock::documentClosed()
     m_tree->clear();
     AbstractInfoDock::documentClosed();
 }
-
-#include "toc.moc"

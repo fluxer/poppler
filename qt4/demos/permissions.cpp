@@ -62,5 +62,3 @@ void PermissionsDock::documentClosed()
     m_table->clear();
     AbstractInfoDock::documentClosed();
 }
-
-#include "permissions.moc"

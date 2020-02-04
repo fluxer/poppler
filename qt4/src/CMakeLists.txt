@@ -28,7 +28,6 @@ set(poppler_qt4_SRCS
   poppler-media.cc
   ArthurOutputDev.cc
 )
-qt4_automoc(${poppler_qt4_SRCS})
 add_library(poppler-qt4 SHARED ${poppler_qt4_SRCS})
 set_target_properties(poppler-qt4 PROPERTIES VERSION 4.11.0 SOVERSION 4)
 if(MINGW)

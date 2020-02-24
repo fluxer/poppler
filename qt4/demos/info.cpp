@@ -50,7 +50,7 @@ void InfoDock::fillInfo()
         const int id = keys.indexOf(date);
         if (id != -1) {
             m_table->setItem(i, 0, new QTableWidgetItem(date));
-            m_table->setItem(i, 1, new QTableWidgetItem(document()->date(date).toString(Qt::SystemLocaleDate)));
+            m_table->setItem(i, 1, new QTableWidgetItem(document()->date(date).toString(Qt::SystemLocaleShortDate)));
             ++i;
             keys.removeAt(id);
         }

@@ -145,15 +145,6 @@ void CrazyThread::run()
 
         if(qrand() % 2 == 0)
         {
-            qDebug() << "thumbnail...";
-
-            PagePointer page(loadRandomPage(m_document));
-
-            page->thumbnail();
-        }
-
-        if(qrand() % 2 == 0)
-        {
             qDebug() << "text...";
 
             PagePointer page(loadRandomPage(m_document));

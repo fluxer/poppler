@@ -462,24 +462,6 @@ bool Page::renderToPainter(QPainter* painter, double xres, double yres, int x, i
   return false;
 }
 
-QImage Page::thumbnail() const
-{
-  unsigned char* data = 0;
-  int w = 0;
-  int h = 0;
-  int rowstride = 0;
-  GBool r = m_page->page->loadThumb(&data, &w, &h, &rowstride);
-  QImage ret;
-  if (r)
-  {
-    // first construct a temporary image with the data got,
-    // then force a copy of it so we can free the raw thumbnail data
-    ret = QImage(data, w, h, rowstride, QImage::Format_RGB888).copy();
-    gfree(data);
-  }
-  return ret;
-}
-
 QString Page::text(const QRectF &r, TextLayout textLayout) const
 {
   TextOutputDev *output_dev;

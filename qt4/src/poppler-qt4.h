@@ -537,16 +537,6 @@ delete it;
                              Rotation rotate = Rotate0, PainterFlags flags = 0) const;
 
 	/**
-	   Get the page thumbnail if it exists.
-
-	   \return a QImage of the thumbnail, or a null image
-	   if the PDF does not contain one for this page
-
-	   \since 0.12
-	*/
-	QImage thumbnail() const;
-
-	/**
 	   Returns the text that is inside a specified rectangle
 
 	   \param rect the rectangle specifying the area of interest,

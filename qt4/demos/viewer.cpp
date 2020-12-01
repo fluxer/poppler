@@ -29,7 +29,6 @@
 #include "optcontent.h"
 #include "pageview.h"
 #include "permissions.h"
-#include "thumbnails.h"
 #include "toc.h"
 
 #include <poppler-qt4.h>
@@ -119,12 +118,6 @@ PdfViewer::PdfViewer()
     permissionsDock->hide();
     viewMenu->addAction(permissionsDock->toggleViewAction());
     m_observers.append(permissionsDock);
-
-    ThumbnailsDock *thumbnailsDock = new ThumbnailsDock(this);
-    addDockWidget(Qt::LeftDockWidgetArea, thumbnailsDock);
-    thumbnailsDock->hide();
-    viewMenu->addAction(thumbnailsDock->toggleViewAction());
-    m_observers.append(thumbnailsDock);
 
     EmbeddedFilesDock *embfilesDock = new EmbeddedFilesDock(this);
     addDockWidget(Qt::BottomDockWidgetArea, embfilesDock);

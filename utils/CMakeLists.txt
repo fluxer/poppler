@@ -17,36 +17,6 @@ if (ENABLE_SPLASH)
   install(FILES pdftoppm.1 DESTINATION ${CMAKE_INSTALL_MANDIR}/man1)
 endif ()
 
-if (HAVE_CAIRO)
-  # pdftocairo
-  set(pdftocairo_SOURCES ${common_srcs}
-    pdftocairo.cc
-    pdftocairo-win32.cc
-    ${CMAKE_SOURCE_DIR}/poppler/CairoFontEngine.cc
-    ${CMAKE_SOURCE_DIR}/poppler/CairoOutputDev.cc
-    ${CMAKE_SOURCE_DIR}/poppler/CairoRescaleBox.cc
-  )
-  include_directories(
-    ${CMAKE_CURRENT_SOURCE_DIR}
-    ${CMAKE_CURRENT_BINARY_DIR}
-    ${CAIRO_INCLUDE_DIRS}
-  )
-  add_definitions(${CAIRO_CFLAGS})
-  add_executable(pdftocairo ${pdftocairo_SOURCES})
-  target_link_libraries(pdftocairo ${CAIRO_LIBRARIES} ${FREETYPE_LIBRARIES} ${common_libs})
-  if(LCMS_FOUND)
-    target_link_libraries(pdftocairo ${LCMS_LIBRARIES})
-  endif()
-  if(CMAKE_USE_PTHREADS_INIT)
-    target_link_libraries(pdftocairo Threads::Threads)
-  endif()
-  if(LCMS2_FOUND)
-    target_link_libraries(pdftocairo ${LCMS2_LIBRARIES})
-  endif()
-  install(TARGETS pdftocairo DESTINATION bin)
-  install(FILES pdftocairo.1 DESTINATION ${CMAKE_INSTALL_MANDIR}/man1)
-endif ()
-
 # pdfdetach
 set(pdfdetach_SOURCES ${common_srcs}
   pdfdetach.cc

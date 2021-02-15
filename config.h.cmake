@@ -27,9 +27,6 @@
 /* Build against libnss3 for digital signature validation */
 #cmakedefine ENABLE_NSS3 1
 
-/* Use cairo for rendering. */
-#cmakedefine HAVE_CAIRO 1
-
 /* Do we have any DCT decoder?. */
 #cmakedefine HAVE_DCT_DECODER 1
 
@@ -69,9 +66,6 @@
 
 /* Defines if timegm is available on your system */
 #cmakedefine HAVE_TIMEGM 1
-
-/* Define if you have the iconv() function and it works. */
-#cmakedefine HAVE_ICONV 1
 
 /* Define to 1 if you have the `openjpeg' library (-lopenjpeg). */
 #cmakedefine HAVE_LIBOPENJPEG 1

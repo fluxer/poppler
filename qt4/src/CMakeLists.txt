@@ -36,7 +36,7 @@ if(MINGW)
 endif()
 target_link_libraries(poppler-qt4 poppler ${QT4_QTCORE_LIBRARY} ${QT4_QTGUI_LIBRARY} ${QT4_QTXML_LIBRARY})
 if(MSVC)
-target_link_libraries(poppler-qt4 poppler ${poppler_LIBS})
+    target_link_libraries(poppler-qt4 poppler ${poppler_LIBS})
 endif()
 install(TARGETS poppler-qt4 RUNTIME DESTINATION bin LIBRARY DESTINATION ${CMAKE_INSTALL_LIBDIR} ARCHIVE DESTINATION ${CMAKE_INSTALL_LIBDIR})
 

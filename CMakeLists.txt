@@ -39,8 +39,8 @@ set (CMAKE_CXX_EXTENSIONS OFF)
 
 # command line switches
 option(ENABLE_XPDF_HEADERS "Install unsupported xpdf headers." OFF)
+option(BUILD_TESTS "Whether compile the test programs." ON)
 option(BUILD_QT4_TESTS "Whether compile the Qt4 test programs." ON)
-option(BUILD_CPP_TESTS "Whether compile the CPP test programs." ON)
 option(ENABLE_SPLASH "Build the Splash graphics backend." ON)
 option(ENABLE_UTILS "Compile poppler command line utils." ON)
 set(ENABLE_LIBOPENJPEG "auto" CACHE STRING "Use libopenjpeg for JPX streams. Possible values: auto, openjpeg1, openjpeg2, unmaintained, none. 'auto' prefers openjpeg2 over openjpeg1 if both are available. 'unmaintained' gives you the internal unmaintained decoder. Use at your own risk. 'none' compiles no JPX decoder at all. Default: auto")
@@ -709,10 +709,17 @@ install(FILES
   qt4/src/poppler-media.h
   DESTINATION include/poppler/katie)
 
+if(BUILD_TESTS OR BUILD_QT4_TESTS)
+ # enable the testing facilities
+  enable_testing()
+endif()
+
 if(ENABLE_UTILS)
   add_subdirectory(utils)
 endif()
-add_subdirectory(test)
+if(BUILD_TESTS)
+    add_subdirectory(test)
+endif()
 add_subdirectory(qt4)
 
 poppler_create_install_pkgconfig(poppler-katie.pc ${CMAKE_INSTALL_LIBDIR}/pkgconfig)

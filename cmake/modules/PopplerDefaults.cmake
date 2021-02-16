@@ -1,6 +1,3 @@
-# enable the testing facilities
-enable_testing()
-
 # put the include directories of the sources before other include paths
 # (eg, system includes)
 set(CMAKE_INCLUDE_DIRECTORIES_PROJECT_BEFORE ON)

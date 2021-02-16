@@ -3,7 +3,7 @@ set(common_srcs
   parseargs.cc
 )
 set(common_libs
-  poppler
+  poppler-katie
 )
 
 if (ENABLE_SPLASH)

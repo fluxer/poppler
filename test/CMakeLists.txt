@@ -7,7 +7,7 @@ if (ENABLE_SPLASH)
       perf-test-preview-dummy.cc
     )
     add_executable(perf-test ${perf_test_SRCS})
-    target_link_libraries(perf-test poppler)
+    target_link_libraries(perf-test poppler-katie)
     if (LIB_RT_HAS_NANOSLEEP)
       target_link_libraries(perf-test rt)
     endif ()
@@ -20,6 +20,6 @@ set (pdf_fullrewrite_SRCS
   ../utils/parseargs.cc
 )
 add_executable(pdf-fullrewrite ${pdf_fullrewrite_SRCS})
-target_link_libraries(pdf-fullrewrite poppler)
+target_link_libraries(pdf-fullrewrite poppler-katie)
 
 

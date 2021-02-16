@@ -43,7 +43,6 @@ option(BUILD_QT4_TESTS "Whether compile the Qt4 test programs." ON)
 option(BUILD_CPP_TESTS "Whether compile the CPP test programs." ON)
 option(ENABLE_SPLASH "Build the Splash graphics backend." ON)
 option(ENABLE_UTILS "Compile poppler command line utils." ON)
-option(ENABLE_QT4 "Compile poppler qt4 wrapper." ON)
 set(ENABLE_LIBOPENJPEG "auto" CACHE STRING "Use libopenjpeg for JPX streams. Possible values: auto, openjpeg1, openjpeg2, unmaintained, none. 'auto' prefers openjpeg2 over openjpeg1 if both are available. 'unmaintained' gives you the internal unmaintained decoder. Use at your own risk. 'none' compiles no JPX decoder at all. Default: auto")
 set(ENABLE_CMS "auto" CACHE STRING "Use color management system. Possible values: auto, lcms1, lcms2. 'auto' prefers lcms2 over lcms1 if both are available. Unset to disable color management system.")
 set(ENABLE_DCTDECODER "libjpeg" CACHE STRING "Use libjpeg for DCT streams. Possible values: libjpeg, unmaintained, none. will use libjpeg if available or fail if not. 'unmaintained' gives you the internal unmaintained decoder. Use at your own risk. 'none' compiles no DCT decoder at all. Default: libjpeg")
@@ -136,15 +135,18 @@ else()
   message(FATAL_ERROR "Invalid ENABLE_DCTDECODER value.")
 endif()
 
-if (ENABLE_QT4)
-  find_package(Katie)
-  if (NOT Katie_FOUND)
-    macro_optional_find_package(Qt4)
-  endif()
-  if (NOT QT4_FOUND)
-    set(ENABLE_QT4 OFF)
-  endif()
-endif()
+find_package(Katie REQUIRED)
+
+add_definitions(${QT4_DEFINITIONS})
+
+include_directories(
+  ${CMAKE_SOURCE_DIR}/qt4/src
+  ${QT4_INCLUDE_DIR}
+  ${CMAKE_BINARY_DIR}/qt4/src
+)
+
+set(CMAKE_AUTOMOC TRUE)
+set(CMAKE_AUTOUIC TRUE)
 
 if(ENABLE_ZLIB)
   find_package(ZLIB)
@@ -294,6 +296,9 @@ if(NOT DEFINED POPPLER_DATADIR)
   set(POPPLER_DATADIR "${CMAKE_INSTALL_PREFIX}/share/poppler")
 endif()
 
+# Qt4 headers are not override clean so disable suggest-override if it's there
+string(REPLACE "-Wsuggest-override" " " CMAKE_CXX_FLAGS ${CMAKE_CXX_FLAGS})
+
 if(EXTRA_WARN)
   set(CMAKE_C_FLAGS "-Wall ${CMAKE_C_FLAGS}")
   set(CMAKE_CXX_FLAGS "${DEFAULT_COMPILE_WARNINGS_EXTRA} ${CMAKE_CXX_FLAGS}")
@@ -395,8 +400,29 @@ set(poppler_SRCS
   poppler/XpdfPluginAPI.cc
   poppler/Movie.cc
   poppler/Rendition.cc
+  qt4/src/poppler-annotation.cc
+  qt4/src/poppler-document.cc
+  qt4/src/poppler-embeddedfile.cc
+  qt4/src/poppler-fontinfo.cc
+  qt4/src/poppler-form.cc
+  qt4/src/poppler-link.cc
+  qt4/src/poppler-link-extractor.cc
+  qt4/src/poppler-movie.cc
+  qt4/src/poppler-optcontent.cc
+  qt4/src/poppler-page.cc
+  qt4/src/poppler-base-converter.cc
+  qt4/src/poppler-pdf-converter.cc
+  qt4/src/poppler-private.cc
+  qt4/src/poppler-ps-converter.cc
+  qt4/src/poppler-qiodeviceoutstream.cc
+  qt4/src/poppler-sound.cc
+  qt4/src/poppler-textbox.cc
+  qt4/src/poppler-page-transition.cc
+  qt4/src/poppler-media.cc
+  qt4/src/ArthurOutputDev.cc
 )
 set(poppler_LIBS ${FREETYPE_LIBRARIES})
+set(poppler_public_LIBS ${QT4_QTCORE_LIBRARY} ${QT4_QTGUI_LIBRARY} ${QT4_QTXML_LIBRARY})
 if(ENABLE_SPLASH)
   set(poppler_SRCS ${poppler_SRCS}
     poppler/SplashOutputDev.cc
@@ -493,20 +519,21 @@ endif()
 if(MSVC)
 add_definitions(-D_CRT_SECURE_NO_WARNINGS)
 set(CMAKE_CXX_FLAGS "/Zc:wchar_t- ${CMAKE_CXX_FLAGS}")
-add_library(poppler STATIC ${poppler_SRCS})
+add_library(poppler-katie STATIC ${poppler_SRCS})
 else()
-add_library(poppler ${poppler_SRCS})
+add_library(poppler-katie ${poppler_SRCS})
 endif()
-set_target_properties(poppler PROPERTIES VERSION 72.0.0 SOVERSION 72)
+set_target_properties(poppler-katie PROPERTIES VERSION 72.0.0 SOVERSION 72)
 if(MINGW)
     get_target_property(POPPLER_SOVERSION poppler SOVERSION)
-    set_target_properties(poppler PROPERTIES SUFFIX "-${POPPLER_SOVERSION}${CMAKE_SHARED_LIBRARY_SUFFIX}")
+    set_target_properties(poppler-katie PROPERTIES SUFFIX "-${POPPLER_SOVERSION}${CMAKE_SHARED_LIBRARY_SUFFIX}")
 endif()
-target_link_libraries(poppler LINK_PRIVATE ${poppler_LIBS})
+target_link_libraries(poppler-katie LINK_PRIVATE ${poppler_LIBS})
+target_link_libraries(poppler-katie LINK_PUBLIC ${poppler_public_LIBS})
 if(CMAKE_USE_PTHREADS_INIT)
-   target_link_libraries(poppler LINK_PRIVATE Threads::Threads)
+   target_link_libraries(poppler-katie LINK_PRIVATE Threads::Threads)
 endif()
-install(TARGETS poppler RUNTIME DESTINATION bin LIBRARY DESTINATION ${CMAKE_INSTALL_LIBDIR} ARCHIVE DESTINATION ${CMAKE_INSTALL_LIBDIR})
+install(TARGETS poppler-katie RUNTIME DESTINATION bin LIBRARY DESTINATION ${CMAKE_INSTALL_LIBDIR} ARCHIVE DESTINATION ${CMAKE_INSTALL_LIBDIR})
 
 if(ENABLE_XPDF_HEADERS)
   install(FILES
@@ -671,32 +698,24 @@ if(ENABLE_XPDF_HEADERS)
   endif()
 endif()
 
+install(FILES
+  qt4/src/poppler-qt4.h
+  qt4/src/poppler-link.h
+  qt4/src/poppler-annotation.h
+  qt4/src/poppler-form.h
+  qt4/src/poppler-optcontent.h
+  qt4/src/poppler-export.h
+  qt4/src/poppler-page-transition.h
+  qt4/src/poppler-media.h
+  DESTINATION include/poppler/katie)
 
 if(ENABLE_UTILS)
   add_subdirectory(utils)
 endif()
 add_subdirectory(test)
-if(ENABLE_QT4)
-  add_subdirectory(qt4)
-endif()
+add_subdirectory(qt4)
 
-set(PKG_CONFIG_VERSION_0_18 TRUE)
-if(PKG_CONFIG_EXECUTABLE)
-  exec_program(${PKG_CONFIG_EXECUTABLE} ARGS --version RETURN_VALUE _return_VALUE OUTPUT_VARIABLE _output_VAR)
-  macro_ensure_version("0.18" "${_output_VAR}" PKG_CONFIG_VERSION_0_18)
-endif()
-if(PKG_CONFIG_VERSION_0_18)
-  set(PC_REQUIRES "")
-  set(PC_REQUIRES_PRIVATE "Requires.private: poppler = ${POPPLER_VERSION}")
-else()
-  set(PC_REQUIRES "poppler = ${POPPLER_VERSION}")
-  set(PC_REQUIRES_PRIVATE "")
-endif()
-
-poppler_create_install_pkgconfig(poppler.pc ${CMAKE_INSTALL_LIBDIR}/pkgconfig)
-if(ENABLE_QT4)
-  poppler_create_install_pkgconfig(poppler-qt4.pc ${CMAKE_INSTALL_LIBDIR}/pkgconfig)
-endif()
+poppler_create_install_pkgconfig(poppler-katie.pc ${CMAKE_INSTALL_LIBDIR}/pkgconfig)
 
 
 message("Building Poppler with support for:")
@@ -705,7 +724,6 @@ show_end_message_yesno("splash output" ENABLE_SPLASH)
 if(SPLASH_CMYK)
   message("      with CMYK support")
 endif()
-show_end_message_yesno("qt4 wrapper" ENABLE_QT4)
 show_end_message_yesno("use libjpeg" ENABLE_LIBJPEG)
 show_end_message_yesno("use libpng" ENABLE_LIBPNG)
 show_end_message_yesno("use libtiff" ENABLE_LIBTIFF)

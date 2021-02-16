@@ -23,4 +23,4 @@ set(poppler_qt4viewer_SRCS
   viewer.cpp
 )
 poppler_add_test(poppler_qt4viewer BUILD_QT4_TESTS ${poppler_qt4viewer_SRCS})
-target_link_libraries(poppler_qt4viewer poppler-qt4)
+target_link_libraries(poppler_qt4viewer poppler-katie)

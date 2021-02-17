@@ -59,7 +59,7 @@ void setErrorCallback(void (*cbk)(void *data, ErrorCategory category,
   errorCbkData = data;
 }
 
-void CDECL error(ErrorCategory category, Goffset pos, const char *msg, ...) {
+void error(ErrorCategory category, Goffset pos, const char *msg, ...) {
   va_list args;
   GooString *s, *sanitized;
 

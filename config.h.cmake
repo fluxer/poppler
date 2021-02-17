@@ -180,27 +180,8 @@
 /* Version number of package */
 #define VERSION "${POPPLER_VERSION}"
 
-/* Use fontconfig font configuration backend */
-#cmakedefine WITH_FONTCONFIGURATION_FONTCONFIG 1
-
-/* Use win32 font configuration backend */
-#cmakedefine WITH_FONTCONFIGURATION_WIN32 1
-
 /* OpenJPEG with the OPJ_DPARAMETERS_IGNORE_PCLR_CMAP_CDEF_FLAG flag */
 #cmakedefine WITH_OPENJPEG_IGNORE_PCLR_CMAP_CDEF_FLAG 1
-
-/* MS defined snprintf as deprecated but then added it in Visual Studio 2015. */
-#if defined(_MSC_VER) && _MSC_VER < 1900
-#define snprintf _snprintf
-#endif
-
-//------------------------------------------------------------------------
-// popen
-//------------------------------------------------------------------------
-#if defined(_MSC_VER) || defined(__BORLANDC__)
-#define popen _popen
-#define pclose _pclose
-#endif
 
 /* Number of bits in a file offset, on hosts where this is settable. */
 #cmakedefine _FILE_OFFSET_BITS @_FILE_OFFSET_BITS@

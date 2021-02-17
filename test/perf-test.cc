@@ -15,18 +15,7 @@
      of a previous run.
 */
 
-#ifdef _MSC_VER
-// this sucks but I don't know any other way
-#pragma comment(linker,"/manifestdependency:\"type='win32' name='Microsoft.Windows.Common-Controls' version='6.0.0.0' processorArchitecture='x86' publicKeyToken='6595b64144ccf1df' language='*'\"")
-#endif
-
 #include <config.h>
-
-#ifdef _WIN32
-#include <windows.h>
-#else
-#include <strings.h>
-#endif
 
 // Define COPY_FILE if you want the file to be copied to a local disk first
 // before it's tested. This is desired if a file is on a slow drive.
@@ -42,6 +31,7 @@
 #include <string.h>
 #include <errno.h>
 #include <time.h>
+#include <strings.h>
 
 #ifdef HAVE_DIRENT_H
 #include <dirent.h>
@@ -59,11 +49,6 @@
 #include "TextOutputDev.h"
 #include "PDFDoc.h"
 #include "Link.h"
-
-#ifdef _MSC_VER
-#define strdup _strdup
-#define strcasecmp _stricmp
-#endif
 
 #define dimof(X)    (sizeof(X)/sizeof((X)[0]))
 
@@ -895,11 +880,7 @@ Exit:
     delete pdfDoc;
 }
 
-#ifdef _MSC_VER
-#define POPPLER_TMP_NAME "c:\\poppler_tmp.pdf"
-#else
 #define POPPLER_TMP_NAME "/tmp/poppler_tmp.pdf"
-#endif
 
 static void RenderPdf(const char *fileName)
 {

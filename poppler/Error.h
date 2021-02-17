@@ -55,6 +55,6 @@ extern void setErrorCallback(void (*cbk)(void *data, ErrorCategory category,
 					 Goffset pos, char *msg),
 			     void *data);
 
-extern void CDECL error(ErrorCategory category, Goffset pos, const char *msg, ...) GOOSTRING_FORMAT;
+extern void error(ErrorCategory category, Goffset pos, const char *msg, ...) GOOSTRING_FORMAT;
 
 #endif

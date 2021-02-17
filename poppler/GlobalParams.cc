@@ -51,14 +51,9 @@
 #include <string.h>
 #include <stdio.h>
 #include <ctype.h>
+#include <strings.h>
 #ifdef ENABLE_PLUGINS
-#  ifndef _WIN32
-#    include <dlfcn.h>
-#  endif
-#endif
-#ifdef _WIN32
-#  include <shlobj.h>
-#  include <mbstring.h>
+#  include <dlfcn.h>
 #endif
 #include "goo/gmem.h"
 #include "goo/GooString.h"
@@ -78,15 +73,7 @@
 #include "GlobalParams.h"
 #include "GfxFont.h"
 
-#ifdef WITH_FONTCONFIGURATION_FONTCONFIG
 #include <fontconfig/fontconfig.h>
-#endif
-
-#ifdef _WIN32
-#  define strcasecmp stricmp
-#else
-#  include <strings.h>
-#endif
 
 #ifdef MULTITHREADED
 #  define lockGlobalParams            gLockMutex(&mutex)
@@ -126,67 +113,6 @@ extern XpdfPluginVecTable xpdfPluginVecTable;
 //------------------------------------------------------------------------
 
 GlobalParams *globalParams = NULL;
-
-#if defined(ENABLE_RELOCATABLE) && defined(_WIN32)
-
-/* search for data relative to where we are installed */
-
-static HMODULE hmodule;
-
-extern "C" {
-  /* Provide declaration to squelch -Wmissing-declarations warning */
-  BOOL WINAPI
-  DllMain (HINSTANCE hinstDLL,
-	   DWORD     fdwReason,
-	   LPVOID    lpvReserved);
-
-  BOOL WINAPI
-  DllMain (HINSTANCE hinstDLL,
-	   DWORD     fdwReason,
-	   LPVOID    lpvReserved)
-  {
-    switch (fdwReason) {
-      case DLL_PROCESS_ATTACH:
-	hmodule = hinstDLL;
-	break;
-    }
-
-    return TRUE;
-  }
-}
-
-static const char *
-get_poppler_datadir (void)
-{
-  static char retval[MAX_PATH];
-  static int beenhere = 0;
-
-  unsigned char *p;
-
-  if (beenhere)
-    return retval;
-
-  if (!GetModuleFileNameA (hmodule, (CHAR *) retval, sizeof(retval) - 20))
-    return POPPLER_DATADIR;
-
-  p = _mbsrchr ((unsigned char *) retval, '\\');
-  *p = '\0';
-  p = _mbsrchr ((unsigned char *) retval, '\\');
-  if (p) {
-    if (stricmp ((const char *) (p+1), "bin") == 0)
-      *p = '\0';
-  }
-  strcat (retval, "\\share\\poppler");
-
-  beenhere = 1;
-
-  return retval;
-}
-
-#undef POPPLER_DATADIR
-#define POPPLER_DATADIR get_poppler_datadir ()
-
-#endif
 
 //------------------------------------------------------------------------
 // SysFontInfo
@@ -258,18 +184,8 @@ public:
   ~SysFontList();
   SysFontInfo *find(GooString *name, GBool isFixedWidth, GBool exact);
 
-#ifdef _WIN32
-  void scanWindowsFonts(GooString *winFontDir);
-#endif
-#ifdef WITH_FONTCONFIGURATION_FONTCONFIG
   void addFcFont(SysFontInfo *si) {fonts->append(si);}
-#endif
 private:
-
-#ifdef _WIN32
-  SysFontInfo *makeWindowsFont(char *name, int fontNum,
-			       char *path);
-#endif
 
   GooList *fonts;			// [SysFontInfo]
 };
@@ -892,7 +808,6 @@ FILE *GlobalParams::findToUnicodeFile(GooString *name) {
   return NULL;
 }
 
-#ifdef WITH_FONTCONFIGURATION_FONTCONFIG
 static GBool findModifier(const char *name, const char *modifier, const char **start)
 {
   const char *match;
@@ -1063,7 +978,6 @@ static FcPattern *buildFcPattern(GfxFont *font, GooString *base14Name)
     delete[] family;
   return p;
 }
-#endif
 
 GooString *GlobalParams::findFontFile(GooString *fontName) {
   GooString *path;
@@ -1080,9 +994,8 @@ GooString *GlobalParams::findFontFile(GooString *fontName) {
 }
 
 /* if you can't or don't want to use Fontconfig, you need to implement
-   this function for your platform. For Windows, it's in GlobalParamsWin.cc
+   this function for your platform
 */
-#ifdef WITH_FONTCONFIGURATION_FONTCONFIG
 // not needed for fontconfig
 void GlobalParams::setupBaseFonts(char *dir) {
 }
@@ -1255,109 +1168,6 @@ fin:
   unlockGlobalParams;
   return path;
 }
-
-#elif WITH_FONTCONFIGURATION_WIN32
-#include "GlobalParamsWin.cc"
-
-GooString *GlobalParams::findBase14FontFile(GooString *base14Name, GfxFont *font) {
-  return findFontFile(base14Name);
-}
-#else
-GooString *GlobalParams::findBase14FontFile(GooString *base14Name, GfxFont *font) {
-  return findFontFile(base14Name);
-}
-
-static struct {
-  const char *name;
-  const char *t1FileName;
-  const char *ttFileName;
-} displayFontTab[] = {
-  {"Courier",               "n022003l.pfb", "cour.ttf"},
-  {"Courier-Bold",          "n022004l.pfb", "courbd.ttf"},
-  {"Courier-BoldOblique",   "n022024l.pfb", "courbi.ttf"},
-  {"Courier-Oblique",       "n022023l.pfb", "couri.ttf"},
-  {"Helvetica",             "n019003l.pfb", "arial.ttf"},
-  {"Helvetica-Bold",        "n019004l.pfb", "arialbd.ttf"},
-  {"Helvetica-BoldOblique", "n019024l.pfb", "arialbi.ttf"},
-  {"Helvetica-Oblique",     "n019023l.pfb", "ariali.ttf"},
-  {"Symbol",                "s050000l.pfb", NULL},
-  {"Times-Bold",            "n021004l.pfb", "timesbd.ttf"},
-  {"Times-BoldItalic",      "n021024l.pfb", "timesbi.ttf"},
-  {"Times-Italic",          "n021023l.pfb", "timesi.ttf"},
-  {"Times-Roman",           "n021003l.pfb", "times.ttf"},
-  {"ZapfDingbats",          "d050000l.pfb", NULL},
-  {NULL}
-};
-
-static const char *displayFontDirs[] = {
-  "/usr/share/ghostscript/fonts",
-  "/usr/local/share/ghostscript/fonts",
-  "/usr/share/fonts/default/Type1",
-  "/usr/share/fonts/default/ghostscript",
-  "/usr/share/fonts/type1/gsfonts",
-  NULL
-};
-
-void GlobalParams::setupBaseFonts(char *dir) {
-  GooString *fontName;
-  GooString *fileName;
-  FILE *f;
-  int i, j;
-
-  for (i = 0; displayFontTab[i].name; ++i) {
-    if (fontFiles->lookup(displayFontTab[i].name)) {
-      continue;
-    }
-    fontName = new GooString(displayFontTab[i].name);
-    fileName = NULL;
-    if (dir) {
-      fileName = appendToPath(new GooString(dir), displayFontTab[i].t1FileName);
-      if ((f = fopen(fileName->getCString(), "rb"))) {
-	      fclose(f);
-      } else {
-	      delete fileName;
-	      fileName = NULL;
-      }
-    }
-    for (j = 0; !fileName && displayFontDirs[j]; ++j) {
-      fileName = appendToPath(new GooString(displayFontDirs[j]),
-			      displayFontTab[i].t1FileName);
-      if ((f = fopen(fileName->getCString(), "rb"))) {
-	      fclose(f);
-      } else {
-	      delete fileName;
-	      fileName = NULL;
-      }
-    }
-    if (!fileName) {
-      error(errConfig, -1, "No display font for '{0:s}'",
-	    displayFontTab[i].name);
-      delete fontName;
-      continue;
-    }
-    addFontFile(fontName, fileName);
-  }
-
-}
-
-GooString *GlobalParams::findSystemFontFile(GfxFont *font,
-					  SysFontType *type,
-					  int *fontNum, GooString * /*substituteFontName*/,
-					  GooString * /*base14Name*/) {
-  SysFontInfo *fi;
-  GooString *path;
-
-  path = NULL;
-  lockGlobalParams;
-  if ((fi = sysFonts->find(font->getName(), font->isFixedWidth(), gFalse))) {
-    path = fi->path->copy();
-    *type = fi->type;
-    *fontNum = fi->fontNum;
-  }
-  unlockGlobalParams; 
-  return path;
-}
-#endif
 
 GBool GlobalParams::getPSExpandSmaller() {
   GBool f;

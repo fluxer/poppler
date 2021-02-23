@@ -46,7 +46,6 @@ option(SPLASH_CMYK "Include support for CMYK rasterization." OFF)
 option(USE_FIXEDPOINT "Use fixed point arithmetic in the Splash backend" OFF)
 option(USE_FLOAT "Use single precision arithmetic in the Splash backend" OFF)
 option(BUILD_SHARED_LIBS "Build poppler as a shared library" ON)
-option(EXTRA_WARN "Enable extra compile warnings" OFF)
 
 set(CMAKE_INSTALL_RPATH_USE_LINK_PATH TRUE)
 
@@ -255,18 +254,6 @@ endif()
 if(NOT DEFINED POPPLER_DATADIR)
   set(POPPLER_DATADIR "${CMAKE_INSTALL_PREFIX}/share/poppler")
 endif()
-
-# Qt4 headers are not override clean so disable suggest-override if it's there
-string(REPLACE "-Wsuggest-override" " " CMAKE_CXX_FLAGS ${CMAKE_CXX_FLAGS})
-
-if(EXTRA_WARN)
-  set(CMAKE_C_FLAGS "-Wall ${CMAKE_C_FLAGS}")
-  set(CMAKE_CXX_FLAGS "${DEFAULT_COMPILE_WARNINGS_EXTRA} ${CMAKE_CXX_FLAGS}")
-else()
-  set(CMAKE_C_FLAGS "-Wall ${CMAKE_C_FLAGS}")
-  set(CMAKE_CXX_FLAGS "${DEFAULT_COMPILE_WARNINGS} ${CMAKE_CXX_FLAGS}")
-endif()
-
 
 include(ConfigureChecks.cmake)
 configure_file(config.h.cmake ${CMAKE_CURRENT_BINARY_DIR}/config.h)

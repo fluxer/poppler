@@ -86,42 +86,11 @@ set(CMAKE_SYSTEM_PROGRAM_PATH ${CMAKE_SYSTEM_PROGRAM_PATH}
 set(CMAKE_SYSTEM_LIBRARY_PATH ${CMAKE_SYSTEM_LIBRARY_PATH}
                               "${CMAKE_INSTALL_PREFIX}/lib" )
 
-# under Windows dlls may be also installed in bin/
-if(WIN32)
-  set(CMAKE_SYSTEM_LIBRARY_PATH ${CMAKE_SYSTEM_LIBRARY_PATH}
-                                "${CMAKE_INSTALL_PREFIX}/bin" )
-endif(WIN32)
-
 if(NOT CMAKE_BUILD_TYPE AND NOT CMAKE_CONFIGURATION_TYPES)
   set(CMAKE_BUILD_TYPE RelWithDebInfo)
 endif(NOT CMAKE_BUILD_TYPE AND NOT CMAKE_CONFIGURATION_TYPES)
 
 if(CMAKE_COMPILER_IS_GNUCXX)
-  # set the default compile warnings
-  set(_warn "-Wall -Wextra -Wpedantic")
-  set(_warn "${_warn} -Wno-unused-parameter -Wno-missing-field-initializers")
-  set(_warn "${_warn} -Wcast-align")
-  set(_warn "${_warn} -Wformat-security")
-  set(_warn "${_warn} -Wframe-larger-than=65536")
-  set(_warn "${_warn} -Wlogical-op")
-  set(_warn "${_warn} -Wmissing-format-attribute")
-  set(_warn "${_warn} -Wnon-virtual-dtor")
-  set(_warn "${_warn} -Woverloaded-virtual")
-  set(_warn "${_warn} -Wmissing-declarations")
-  set(_warn "${_warn} -Wundef")
-  if (NOT CMAKE_CXX_COMPILER_VERSION VERSION_LESS "5.0.0")
-    set(_warn "${_warn} -Wsuggest-override")
-  endif()
-
-  # set extra warnings
-  set(_warnx "${_warnx} -Wconversion")
-  set(_warnx "${_warnx} -Wshadow")
-  set(_warnx "${_warnx} -Wuseless-cast")
-  set(_warnx "${_warnx} -Wzero-as-null-pointer-constant")
-
-  set(DEFAULT_COMPILE_WARNINGS "${_warn}")
-  set(DEFAULT_COMPILE_WARNINGS_EXTRA "${_warn} ${_warnx}")
-
   set(_save_cxxflags "${CMAKE_CXX_FLAGS}")
   set(CMAKE_CXX_FLAGS                "-fno-exceptions -fno-check-new -fno-common -D_DEFAULT_SOURCE")
   set(CMAKE_CXX_FLAGS_RELWITHDEBINFO "-O2 -g ${_save_cxxflags}")
@@ -143,18 +112,5 @@ if(CMAKE_COMPILER_IS_GNUCXX)
     set(CMAKE_MODULE_LINKER_FLAGS "${CMAKE_MODULE_LINKER_FLAGS} -Wl,--as-needed")
     set(CMAKE_EXE_LINKER_FLAGS "${CMAKE_EXE_LINKER_FLAGS} -Wl,--as-needed")
   endif(GCC_HAS_AS_NEEDED)
-endif (CMAKE_COMPILER_IS_GNUCXX)
-
-if(CMAKE_C_COMPILER MATCHES "icc")
-  set(_save_cxxflags "${CMAKE_CXX_FLAGS}")
-  set(CMAKE_CXX_FLAGS_RELWITHDEBINFO "-O2 -g ${_save_cxxflags}")
-  set(CMAKE_CXX_FLAGS_RELEASE        "-O2 -DNDEBUG ${_save_cxxflags}")
-  set(CMAKE_CXX_FLAGS_DEBUG          "-O2 -g -0b0 -noalign ${_save_cxxflags}")
-  set(CMAKE_CXX_FLAGS_DEBUGFULL      "-g -Ob0 -noalign ${_save_cxxflags}")
-  set(_save_cflags "${CMAKE_C_FLAGS}")
-  set(CMAKE_C_FLAGS_RELWITHDEBINFO   "-O2 -g ${_save_cflags}")
-  set(CMAKE_C_FLAGS_RELEASE          "-O2 -DNDEBUG ${_save_cflags}")
-  set(CMAKE_C_FLAGS_DEBUG            "-O2 -g -Ob0 -noalign ${_save_cflags}")
-  set(CMAKE_C_FLAGS_DEBUGFULL        "-g -Ob0 -noalign ${_save_cflags}")
-endif(CMAKE_C_COMPILER MATCHES "icc")
+endif(CMAKE_COMPILER_IS_GNUCXX)
 

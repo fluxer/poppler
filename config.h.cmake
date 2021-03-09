@@ -123,9 +123,6 @@
 /* Define to 1 if you have a big endian machine */
 #cmakedefine WORDS_BIGENDIAN 1
 
-/* Define as const if the declaration of iconv() needs const. */
-#define ICONV_CONST ${ICONV_CONST}
-
 /* Enable multithreading support. */
 #cmakedefine MULTITHREADED 1
 

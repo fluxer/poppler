@@ -2,7 +2,7 @@
 # Once done this will define
 #
 #  NSS_FOUND - system has NSS3
-#  NSS3_CFLAGS - the NSS CFlags
+#  NSS3_CFLAGS_OTHER - the NSS CFlags
 #  NSS3_LIBRARIES - Link these to use NSS
 #
 # Copyright 2015 André Guerreiro, <aguerreiro1985@gmail.com>
@@ -17,6 +17,6 @@ if (NOT WIN32)
 
   pkg_check_modules(NSS3 "nss>=3.19")
 
-  find_package_handle_standard_args(NSS3 DEFAULT_MSG NSS3_LIBRARIES NSS3_CFLAGS)
+  find_package_handle_standard_args(NSS3 DEFAULT_MSG NSS3_LIBRARIES NSS3_CFLAGS_OTHER)
 
 endif(NOT WIN32)

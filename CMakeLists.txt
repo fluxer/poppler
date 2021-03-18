@@ -212,7 +212,7 @@ if(ENABLE_ZLIB)
 endif()
 
 if(NSS3_FOUND)
-  add_definitions(${NSS3_CFLAGS})
+  add_definitions(${NSS3_CFLAGS_OTHER})
   set(ENABLE_NSS3 ON)
 endif()
 if(JPEG_FOUND)

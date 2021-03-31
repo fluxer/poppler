@@ -21,14 +21,14 @@
 #include <nspr.h>
 
 /* NSS headers */
-#include <cms.h>
-#include <nss.h>
-#include <cert.h>
-#include <cryptohi.h>
-#include <secerr.h>
-#include <secoid.h>
-#include <secmodt.h>
-#include <sechash.h>
+#include <nss/cms.h>
+#include <nss/nss.h>
+#include <nss/cert.h>
+#include <nss/cryptohi.h>
+#include <nss/secerr.h>
+#include <nss/secoid.h>
+#include <nss/secmodt.h>
+#include <nss/sechash.h>
 
 class SignatureHandler
 {

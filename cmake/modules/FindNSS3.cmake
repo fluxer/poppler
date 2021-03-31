@@ -1,22 +1,40 @@
-# - try to find NSS3 libraries
-# Once done this will define
+# Try to find NSS3, once done this will define:
 #
-#  NSS_FOUND - system has NSS3
-#  NSS3_CFLAGS_OTHER - the NSS CFlags
-#  NSS3_LIBRARIES - Link these to use NSS
+#  NSS3_FOUND - system has NSS3
+#  NSS3_INCLUDES - the NSS3 include directory
+#  NSS3_LIBRARIES - the libraries needed to use NSS3
 #
-# Copyright 2015 André Guerreiro, <aguerreiro1985@gmail.com>
+# Copyright (c) 2015 Ivailo Monev <xakepa10@gmail.com>
 #
 # Redistribution and use is allowed according to the terms of the BSD license.
 # For details see the accompanying COPYING-CMAKE-SCRIPTS file.
 
+if(NOT WIN32)
+    include(FindPkgConfig)
+    pkg_check_modules(PC_NSS3 QUIET nss)
+
+    set(NSS3_INCLUDES ${PC_NSS3_INCLUDE_DIRS})
+    set(NSS3_LIBRARIES ${PC_NSS3_LIBRARIES})
+endif()
+
+set(NSS3_VERSION ${PC_NSS3_VERSION})
+
+if(NOT NSS3_INCLUDES OR NOT NSS3_LIBRARIES)
+    find_path(NSS3_INCLUDES
+        NAMES nss/nss.h
+        HINTS $ENV{NSS3DIR}/include
+    )
+
+    find_library(NSS3_LIBRARIES
+        NAMES nss
+        HINTS $ENV{NSS3DIR}/lib
+    )
+endif()
+
 include(FindPackageHandleStandardArgs)
+find_package_handle_standard_args(NSS3
+    VERSION_VAR NSS3_VERSION
+    REQUIRED_VARS NSS3_LIBRARIES NSS3_INCLUDES
+)
 
-if (NOT WIN32)
-  find_package(PkgConfig REQUIRED)
-
-  pkg_check_modules(NSS3 "nss>=3.19")
-
-  find_package_handle_standard_args(NSS3 DEFAULT_MSG NSS3_LIBRARIES NSS3_CFLAGS_OTHER)
-
-endif(NOT WIN32)
+mark_as_advanced(NSS3_INCLUDES NSS3_LIBRARIES)

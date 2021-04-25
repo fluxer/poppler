@@ -458,7 +458,7 @@ if(TIFF_FOUND)
 endif()
 
 add_library(poppler-katie ${poppler_SRCS})
-set_target_properties(poppler-katie PROPERTIES VERSION 72.0.0 SOVERSION 72)
+set_target_properties(poppler-katie PROPERTIES VERSION ${POPPLER_MAJOR_VERSION}.${POPPLER_MINOR_VERSION} SOVERSION ${POPPLER_MAJOR_VERSION})
 target_link_libraries(poppler-katie LINK_PRIVATE ${poppler_LIBS})
 target_link_libraries(poppler-katie LINK_PUBLIC ${poppler_public_LIBS})
 if(CMAKE_USE_PTHREADS_INIT)

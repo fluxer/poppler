@@ -26,7 +26,7 @@ if(NOT NSS3_INCLUDES OR NOT NSS3_LIBRARIES)
     )
 
     find_library(NSS3_LIBRARIES
-        NAMES nss
+        NAMES nss3
         HINTS $ENV{NSS3DIR}/lib
     )
 endif()

@@ -6,7 +6,6 @@ set(CMAKE_MODULE_PATH ${CMAKE_SOURCE_DIR}/cmake/modules)
 
 include(PopplerMacros)
 include(MacroOptionalFindPackage)
-include(MacroEnsureVersion)
 include(MacroBoolTo01)
 include(GNUInstallDirs)
 

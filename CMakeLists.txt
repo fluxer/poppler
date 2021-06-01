@@ -25,8 +25,11 @@ set(POPPLER_MINOR_VERSION "61")
 set(POPPLER_MICRO_VERSION "1")
 set(POPPLER_VERSION "${POPPLER_MAJOR_VERSION}.${POPPLER_MINOR_VERSION}.${POPPLER_MICRO_VERSION}")
 
+set(CMAKE_AUTOMOC TRUE)
+set(CMAKE_AUTOUIC TRUE)
 set(CMAKE_CXX_STANDARD 11)
 set(CMAKE_CXX_EXTENSIONS OFF)
+set(CMAKE_INSTALL_RPATH_USE_LINK_PATH TRUE)
 # put the include directories of the sources before other include paths
 # (eg, system includes)
 set(CMAKE_INCLUDE_DIRECTORIES_PROJECT_BEFORE ON)
@@ -47,8 +50,6 @@ option(SPLASH_CMYK "Include support for CMYK rasterization." OFF)
 option(USE_FIXEDPOINT "Use fixed point arithmetic in the Splash backend" OFF)
 option(USE_FLOAT "Use single precision arithmetic in the Splash backend" OFF)
 option(BUILD_SHARED_LIBS "Build poppler as a shared library" ON)
-
-set(CMAKE_INSTALL_RPATH_USE_LINK_PATH TRUE)
 
 set(TESTDATADIR "${CMAKE_SOURCE_DIR}/../test" CACHE STRING "Specify test data dir.")
 if(NOT (EXISTS ${TESTDATADIR} AND EXISTS ${TESTDATADIR}/test-poppler.c))
@@ -76,9 +77,6 @@ endif()
 # Enable these unconditionally.
 set(OPI_SUPPORT ON)
 set(TEXTOUT_WORD_LIST ON)
-
-# setting the minimum required versions for some components
-set(QT4_MIN_VERSION "4.7.0")
 
 macro_bool_to_01(ENABLE_SPLASH HAVE_SPLASH)
 find_package(Freetype REQUIRED)
@@ -113,9 +111,6 @@ include_directories(
   ${QT4_INCLUDE_DIR}
   ${CMAKE_BINARY_DIR}/qt4/src
 )
-
-set(CMAKE_AUTOMOC TRUE)
-set(CMAKE_AUTOUIC TRUE)
 
 if(ENABLE_ZLIB)
   find_package(ZLIB)

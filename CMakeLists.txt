@@ -4,7 +4,6 @@ cmake_minimum_required(VERSION 3.1.0 FATAL_ERROR)
 
 set(CMAKE_MODULE_PATH ${CMAKE_SOURCE_DIR}/cmake/modules)
 
-include(PopplerDefaults)
 include(PopplerMacros)
 include(MacroOptionalFindPackage)
 include(MacroEnsureVersion)
@@ -29,6 +28,9 @@ set(POPPLER_VERSION "${POPPLER_MAJOR_VERSION}.${POPPLER_MINOR_VERSION}.${POPPLER
 
 set(CMAKE_CXX_STANDARD 11)
 set(CMAKE_CXX_EXTENSIONS OFF)
+# put the include directories of the sources before other include paths
+# (eg, system includes)
+set(CMAKE_INCLUDE_DIRECTORIES_PROJECT_BEFORE ON)
 
 # command line switches
 option(ENABLE_XPDF_HEADERS "Install unsupported xpdf headers." OFF)

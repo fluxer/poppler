@@ -42,11 +42,6 @@ macro(POPPLER_ADD_UNITTEST exe build_flag)
   endif(NOT build_test)
 endmacro(POPPLER_ADD_UNITTEST)
 
-macro(POPPLER_CREATE_INSTALL_PKGCONFIG generated_file install_location)
-  configure_file(${generated_file}.cmake ${CMAKE_CURRENT_BINARY_DIR}/${generated_file} @ONLY)
-  install(FILES ${CMAKE_CURRENT_BINARY_DIR}/${generated_file} DESTINATION ${install_location})
-endmacro(POPPLER_CREATE_INSTALL_PKGCONFIG)
-
 macro(SHOW_END_MESSAGE what value)
   string(LENGTH ${what} length_what)
   math(EXPR left_char "20 - ${length_what}")

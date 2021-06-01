@@ -654,8 +654,8 @@ if(BUILD_TESTS)
 endif()
 add_subdirectory(qt4)
 
-poppler_create_install_pkgconfig(poppler-katie.pc ${CMAKE_INSTALL_LIBDIR}/pkgconfig)
-
+configure_file(poppler-katie.pc.cmake ${CMAKE_CURRENT_BINARY_DIR}/poppler-katie.pc @ONLY)
+install(FILES ${CMAKE_CURRENT_BINARY_DIR}/poppler-katie.pc DESTINATION ${CMAKE_INSTALL_LIBDIR}/pkgconfig)
 
 message("Building Poppler with support for:")
 show_end_message_yesno("splash output" ENABLE_SPLASH)

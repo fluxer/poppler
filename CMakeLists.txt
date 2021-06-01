@@ -642,7 +642,7 @@ install(FILES
   DESTINATION include/poppler/katie)
 
 if(BUILD_TESTS OR BUILD_QT4_TESTS)
- # enable the testing facilities
+  # enable the testing facilities
   enable_testing()
 endif()
 
@@ -650,7 +650,7 @@ if(ENABLE_UTILS)
   add_subdirectory(utils)
 endif()
 if(BUILD_TESTS)
-    add_subdirectory(test)
+  add_subdirectory(test)
 endif()
 add_subdirectory(qt4)
 
@@ -713,13 +713,3 @@ endif()
 if(NOT HAVE_JPX_DECODER)
   message("Warning: You're not compiling any JPX decoder. Some files will fail to display properly.")
 endif()
-
-set(ARCHIVE_NAME ${CMAKE_PROJECT_NAME}-${POPPLER_VERSION})
-add_custom_target(dist
-    COMMAND
-        COMMAND git log --stat | fmt --split-only > ${CMAKE_BINARY_DIR}/ChangeLog
-        COMMAND git archive --prefix=${ARCHIVE_NAME}/ HEAD > ${CMAKE_BINARY_DIR}/${ARCHIVE_NAME}.tar
-        COMMAND tar -C ${CMAKE_BINARY_DIR} -rf ${CMAKE_BINARY_DIR}/${ARCHIVE_NAME}.tar ChangeLog --transform='s,,${ARCHIVE_NAME}/,'
-        COMMAND tar -C ${CMAKE_BINARY_DIR} -rf ${CMAKE_BINARY_DIR}/${ARCHIVE_NAME}.tar --transform='s,,${ARCHIVE_NAME}/,'
-        COMMAND xz -9 ${CMAKE_BINARY_DIR}/${ARCHIVE_NAME}.tar
-    WORKING_DIRECTORY ${CMAKE_SOURCE_DIR})

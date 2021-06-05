@@ -968,7 +968,7 @@ static FcPattern *buildFcPattern(GfxFont *font, GooString *base14Name)
   p = FcPatternBuild(NULL,
                     FC_FAMILY, FcTypeString, family,
                     FC_LANG, FcTypeString, lang,
-                    NULL);
+                    static_cast<char*>(NULL));
   if (slant != -1) FcPatternAddInteger(p, FC_SLANT, slant);
   if (weight != -1) FcPatternAddInteger(p, FC_WEIGHT, weight);
   if (width != -1) FcPatternAddInteger(p, FC_WIDTH, width);

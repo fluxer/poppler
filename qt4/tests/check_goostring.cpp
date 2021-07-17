@@ -3,6 +3,8 @@
 
 #include "goo/GooString.h"
 
+#include <limits.h>
+
 class TestGooString : public QObject
 {
     Q_OBJECT

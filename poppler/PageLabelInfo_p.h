@@ -17,6 +17,8 @@
 #include "goo/GooString.h"
 #include "Error.h"
 
+#include <limits.h>
+
 static int fromRoman(const char *buffer) {
   int digit_value, prev_digit_value, value;
   int i;

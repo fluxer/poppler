@@ -387,17 +387,17 @@ QImage Page::renderToImage(double xres, double yres, int x, int y, int w, int h,
       if (bitmap->convertToXBGR(mode)) {
           SplashColorPtr data = bitmap->getDataPtr();
 
-          if (QSysInfo::ByteOrder == QSysInfo::BigEndian) {
-              // Convert byte order from RGBX to XBGR.
-              for (int i = 0; i < bh; ++i) {
-                  for (int j = 0; j < bw; ++j) {
-                      SplashColorPtr pixel = &data[i * brs + j];
+#if Q_BYTE_ORDER == Q_BIG_ENDIAN
+          // Convert byte order from RGBX to XBGR.
+          for (int i = 0; i < bh; ++i) {
+              for (int j = 0; j < bw; ++j) {
+                  SplashColorPtr pixel = &data[i * brs + j];
 
-                      qSwap(pixel[0], pixel[3]);
-                      qSwap(pixel[1], pixel[2]);
-                  }
+                  qSwap(pixel[0], pixel[3]);
+                  qSwap(pixel[1], pixel[2]);
               }
           }
+#endif
 
           // Construct a Qt image sharing the raw bitmap data.
           img = QImage(data, bw, bh, brs, format).copy();

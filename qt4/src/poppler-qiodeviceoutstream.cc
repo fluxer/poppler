@@ -56,7 +56,7 @@ void QIODeviceOutStream::printf(const char *format, ...)
   va_start(ap, format);
   char buf[QIODeviceOutStreamBufSize];
   size_t bufsize = 0;
-  bufsize = qvsnprintf(buf, QIODeviceOutStreamBufSize - 1, format, ap);
+  bufsize = ::vsnprintf(buf, QIODeviceOutStreamBufSize - 1, format, ap);
   va_end(ap);
   m_device->write(buf, bufsize);
 }

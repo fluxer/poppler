@@ -35,7 +35,7 @@ check_function_exists(strcat_s HAVE_STRCAT_S)
 check_function_exists(strtok_r HAVE_STRTOK_R)
 
 macro(CHECK_FOR_DIR include var)
-  check_c_source_compiles(
+    check_c_source_compiles(
     "#include <${include}>
 
 int main(int argc, char *argv[])
@@ -52,5 +52,5 @@ check_for_dir("sys/ndir.h" HAVE_SYS_NDIR_H)
 
 check_function_exists("nanosleep" HAVE_NANOSLEEP)
 if(NOT HAVE_NANOSLEEP)
-  check_library_exists("rt" "nanosleep" "" LIB_RT_HAS_NANOSLEEP)
+    check_library_exists("rt" "nanosleep" "" LIB_RT_HAS_NANOSLEEP)
 endif(NOT HAVE_NANOSLEEP)

@@ -347,7 +347,7 @@ PDFRectangle AnnotationPrivate::boundaryToPdfRectangle(const QRectF &r, int flag
         return PDFRectangle(br_x, br_y - width, br_x + height, br_y);
 }
 
-AnnotPath * AnnotationPrivate::toAnnotPath(const QLinkedList<QPointF> &list) const
+AnnotPath * AnnotationPrivate::toAnnotPath(const QList<QPointF> &list) const
 {
     const int count = list.size();
     AnnotCoord **ac = (AnnotCoord **) gmallocn(count, sizeof(AnnotCoord*));
@@ -2293,7 +2293,7 @@ class LineAnnotationPrivate : public AnnotationPrivate
         Annot* createNativeAnnot(::Page *destPage, DocumentData *doc);
 
         // data fields (note uses border for rendering style)
-        QLinkedList<QPointF> linePoints;
+        QList<QPointF> linePoints;
         LineAnnotation::TermStyle lineStartStyle;
         LineAnnotation::TermStyle lineEndStyle;
         bool lineClosed : 1;  // (if true draw close shape)
@@ -2398,7 +2398,7 @@ LineAnnotation::LineAnnotation( const QDomNode & node )
             setLineIntent((LineAnnotation::LineIntent)e.attribute( "intent" ).toInt());
 
         // parse all 'point' subnodes
-        QLinkedList<QPointF> points;
+        QList<QPointF> points;
         QDomNode pointNode = e.firstChild();
         while ( pointNode.isElement() )
         {
@@ -2451,10 +2451,10 @@ void LineAnnotation::store( QDomNode & node, QDomDocument & document ) const
         lineElement.setAttribute( "intent", lineIntent() );
 
     // append the list of points
-    const QLinkedList<QPointF> points = linePoints();
+    const QList<QPointF> points = linePoints();
     if ( points.count() > 1 )
     {
-        QLinkedList<QPointF>::const_iterator it = points.begin(), end = points.end();
+        QList<QPointF>::const_iterator it = points.begin(), end = points.end();
         while ( it != end )
         {
             const QPointF & p = *it;
@@ -2496,7 +2496,7 @@ void LineAnnotation::setLineType( LineAnnotation::LineType type )
     // Type cannot be changed if annotation is already tied
 }
 
-QLinkedList<QPointF> LineAnnotation::linePoints() const
+QList<QPointF> LineAnnotation::linePoints() const
 {
     Q_D( const LineAnnotation );
 
@@ -2506,7 +2506,7 @@ QLinkedList<QPointF> LineAnnotation::linePoints() const
     double MTX[6];
     d->fillTransformationMTX(MTX);
 
-    QLinkedList<QPointF> res;
+    QList<QPointF> res;
     if (d->pdfAnnot->getType() == Annot::typeLine)
     {
         const AnnotLine * lineann = static_cast<const AnnotLine*>(d->pdfAnnot);
@@ -2532,7 +2532,7 @@ QLinkedList<QPointF> LineAnnotation::linePoints() const
     return res;
 }
 
-void LineAnnotation::setLinePoints( const QLinkedList<QPointF> &points )
+void LineAnnotation::setLinePoints( const QList<QPointF> &points )
 {
     Q_D( LineAnnotation );
 
@@ -3474,10 +3474,10 @@ class InkAnnotationPrivate : public AnnotationPrivate
         Annot* createNativeAnnot(::Page *destPage, DocumentData *doc);
 
         // data fields
-        QList< QLinkedList<QPointF> > inkPaths;
+        QList< QList<QPointF> > inkPaths;
 
         // helper
-        AnnotPath **toAnnotPaths(const QList< QLinkedList<QPointF> > &inkPaths);
+        AnnotPath **toAnnotPaths(const QList< QList<QPointF> > &inkPaths);
 };
 
 InkAnnotationPrivate::InkAnnotationPrivate()
@@ -3491,7 +3491,7 @@ Annotation * InkAnnotationPrivate::makeAlias()
 }
 
 // Note: Caller is required to delete array elements and the array itself after use
-AnnotPath **InkAnnotationPrivate::toAnnotPaths(const QList< QLinkedList<QPointF> > &inkPaths)
+AnnotPath **InkAnnotationPrivate::toAnnotPaths(const QList< QList<QPointF> > &inkPaths)
 {
     const int pathsNumber = inkPaths.size();
     AnnotPath **res = new AnnotPath*[pathsNumber];
@@ -3545,7 +3545,7 @@ InkAnnotation::InkAnnotation( const QDomNode & node )
             continue;
 
         // parse the 'path' subnodes
-        QList< QLinkedList<QPointF> > paths;
+        QList< QList<QPointF> > paths;
         QDomNode pathNode = e.firstChild();
         while ( pathNode.isElement() )
         {
@@ -3556,7 +3556,7 @@ InkAnnotation::InkAnnotation( const QDomNode & node )
                 continue;
 
             // build each path parsing 'point' subnodes
-            QLinkedList<QPointF> path;
+            QList<QPointF> path;
             QDomNode pointNode = pathElement.firstChild();
             while ( pointNode.isElement() )
             {
@@ -3595,16 +3595,16 @@ void InkAnnotation::store( QDomNode & node, QDomDocument & document ) const
     node.appendChild( inkElement );
 
     // append the optional attributes
-    const QList< QLinkedList<QPointF> > paths = inkPaths();
+    const QList< QList<QPointF> > paths = inkPaths();
     if ( paths.count() < 1 )
         return;
-    QList< QLinkedList<QPointF> >::const_iterator pIt = paths.begin(), pEnd = paths.end();
+    QList< QList<QPointF> >::const_iterator pIt = paths.begin(), pEnd = paths.end();
     for ( ; pIt != pEnd; ++pIt )
     {
         QDomElement pathElement = document.createElement( "path" );
         inkElement.appendChild( pathElement );
-        const QLinkedList<QPointF> & path = *pIt;
-        QLinkedList<QPointF>::const_iterator iIt = path.begin(), iEnd = path.end();
+        const QList<QPointF> & path = *pIt;
+        QList<QPointF>::const_iterator iIt = path.begin(), iEnd = path.end();
         for ( ; iIt != iEnd; ++iIt )
         {
             const QPointF & point = *iIt;
@@ -3621,7 +3621,7 @@ Annotation::SubType InkAnnotation::subType() const
     return AInk;
 }
 
-QList< QLinkedList<QPointF> > InkAnnotation::inkPaths() const
+QList< QList<QPointF> > InkAnnotation::inkPaths() const
 {
     Q_D( const InkAnnotation );
 
@@ -3632,18 +3632,18 @@ QList< QLinkedList<QPointF> > InkAnnotation::inkPaths() const
 
     const AnnotPath * const* paths = inkann->getInkList();
     if ( !paths || !inkann->getInkListLength() )
-        return QList< QLinkedList<QPointF> >();
+        return QList< QList<QPointF> >();
 
     double MTX[6];
     d->fillTransformationMTX(MTX);
 
     const int pathsNumber = inkann->getInkListLength();
-    QList< QLinkedList<QPointF> > inkPaths;
+    QList< QList<QPointF> > inkPaths;
     inkPaths.reserve(pathsNumber);
     for (int m = 0; m < pathsNumber; ++m)
     {
         // transform each path in a list of normalized points ..
-        QLinkedList<QPointF> localList;
+        QList<QPointF> localList;
         const AnnotPath * path = paths[ m ];
         const int pointsNumber = path ? path->getCoordsLength() : 0;
         for (int n = 0; n < pointsNumber; ++n)
@@ -3658,7 +3658,7 @@ QList< QLinkedList<QPointF> > InkAnnotation::inkPaths() const
     return inkPaths;
 }
 
-void InkAnnotation::setInkPaths( const QList< QLinkedList<QPointF> > &paths )
+void InkAnnotation::setInkPaths( const QList< QList<QPointF> > &paths )
 {
     Q_D( InkAnnotation );
 

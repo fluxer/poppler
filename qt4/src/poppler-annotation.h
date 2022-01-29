@@ -30,7 +30,6 @@
 #include <QtCore/QDateTime>
 #include <QtCore/QSharedDataPointer>
 #include <QtCore/QScopedPointer>
-#include <QtCore/QLinkedList>
 #include <QtCore/QList>
 #include <QtCore/QPointF>
 #include <QtCore/QRectF>
@@ -549,8 +548,8 @@ class POPPLER_QT4_EXPORT LineAnnotation : public Annotation
     /// \since 0.20
     LineType lineType() const;
 
-    QLinkedList<QPointF> linePoints() const;
-    void setLinePoints( const QLinkedList<QPointF> &points );
+    QList<QPointF> linePoints() const;
+    void setLinePoints( const QList<QPointF> &points );
 
     TermStyle lineStartStyle() const;
     void setLineStartStyle( TermStyle style );
@@ -751,8 +750,8 @@ class POPPLER_QT4_EXPORT InkAnnotation : public Annotation
     virtual ~InkAnnotation();
     virtual SubType subType() const;
 
-    QList< QLinkedList<QPointF> > inkPaths() const;
-    void setInkPaths( const QList< QLinkedList<QPointF> > &paths );
+    QList< QList<QPointF> > inkPaths() const;
+    void setInkPaths( const QList< QList<QPointF> > &paths );
 
   private:
     InkAnnotation( const QDomNode &node );
